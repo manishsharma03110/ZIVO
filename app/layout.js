@@ -7,14 +7,14 @@ const site = process.env.SITE_URL
 
 export const metadata = {
   metadataBase: new URL(site),
-  title: 'Morning: Secure Code-Login Chat, Photos & Video Calls',
+  title: 'ZIVO | Fresh Groceries & Daily Essentials Delivered Fast',
   description:
-    'Morning is a simple, secure two-person chat with secret-code login, photo and video sharing that auto-deletes in 24 hours, and voice and video calls right in your browser.',
+    'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
   openGraph: {
-    title: 'Morning: Secure Code-Login Chat, Photos & Video Calls',
-    description: 'Secret-code login, auto-deleting photos and videos, and browser voice and video calls.',
+    title: 'ZIVO | Fresh Groceries & Daily Essentials Delivered Fast',
+    description: 'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
     type: 'website',
     url: '/',
   },
