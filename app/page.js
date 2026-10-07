@@ -1,0 +1,719 @@
+'use client';
+
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { upload } from '@vercel/blob/client';
+import { createVoiceTyping } from '@/lib/voice';
+import { normalizeMessages, quotedAuthor } from '@/lib/messages';
+import SplashScreen from './components/SplashScreen';
+import LoginScreen from './components/LoginScreen';
+
+const IDLE_MS = 60 * 1000;
+
+const post = (url, body) =>
+  fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+export default function Page() {
+  const [s, setS] = useState({ status: 'loading' });
+  const [splash, setSplash] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setSplash(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/me', { cache: 'no-store' })
+      .then(async (r) => (r.ok ? setS({ status: 'in', ...(await r.json()) }) : setS({ status: 'out' })))
+      .catch(() => setS({ status: 'out' }));
+  }, []);
+
+  // Logging out (manually, on idle, or on an expired session) is silent: the loading and login screens never show a notice.
+  const logout = useCallback(async () => {
+    try { await fetch('/api/logout', { method: 'POST' }); } catch {}
+    setS({ status: 'out' });
+  }, []);
+
+  const loggedIn = useCallback(async () => {
+    const r = await fetch('/api/me', { cache: 'no-store' });
+    if (!r.ok) throw new Error('not signed in');
+    setS({ status: 'in', ...(await r.json()) });
+  }, []);
+
+  if (splash || s.status === 'loading') return <SplashScreen />;
+  if (s.status === 'out') return <LoginScreen onDone={loggedIn} />;
+  // The server cookie is the only source of identity. If it no longer matches this tab, reload who we are (Chat remounts via key).
+  const resync = () => { loggedIn().catch(() => setS({ status: 'out' })); };
+  return <Chat key={s.user} me={s.user} names={s.names} ice={s.ice} blob={s.blob} onLogout={logout} onResync={resync} />;
+}
+
+const M={pause:'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>',up:'<path d="m18 15-6-6-6 6"/>',micoff:'<path d="m2 2 20 20M18.9 10.9V12a7 7 0 0 1-.7 3M15 9.3V4a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 10v2a7 7 0 0 0 11.5 5.3M12 19v3"/>',camoff:'<path d="M10.7 5H14a2 2 0 0 1 2 2v3.3l5.6 3.4V7.9L16 10.5M2 2l20 20M2 7v10a2 2 0 0 0 2 2h12"/>',speaker:'<path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',arrow:'<path d="M19 12H5M12 19l-7-7 7-7"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',video:'<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',plus:'<path d="M12 5v14M5 12h14"/>',smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',clip:'<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',check:'<path d="M20 6 9 17l-5-5"/>',mic:'<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/>',cc:'<path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/>',badge:'<path d="M3.9 8.6a4 4 0 0 1 4.7-4.7 4 4 0 0 1 6.8 0 4 4 0 0 1 4.8 4.8 4 4 0 0 1 0 6.8 4 4 0 0 1-4.8 4.7 4 4 0 0 1-6.7 0 4 4 0 0 1-4.8-4.7 4 4 0 0 1 0-6.9z" fill="currentColor" stroke="none"/><path d="m9 12 2 2 4-4" stroke="#fff"/>',user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="currentColor"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/>',reply:'<path d="m9 17-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4"/>',copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',play:'<path d="M6 3l14 9-14 9z" fill="currentColor"/>'};
+const MIc = ({ n, size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: M[n] }} />
+);
+const hm = (ts) => new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+const dayLabel = (ts) => {
+  const t = new Date(), y = new Date(); y.setDate(t.getDate() - 1);
+  if (dayKey(ts) === dayKey(t)) return 'Today';
+  if (dayKey(ts) === dayKey(y)) return 'Yesterday';
+  return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: new Date(ts).getFullYear() === t.getFullYear() ? undefined : 'numeric' });
+};
+const mmss = (n) => Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+const callTitle = (m, mine) => {
+  const t = m.video ? 'video call' : 'voice call', s = m.status;
+  if (s === 'done') return m.video ? 'Video call' : 'Voice call';
+  if (!mine && (s === 'missed' || s === 'cancelled')) return 'Missed ' + t;
+  if (s === 'declined') return 'Declined ' + t;
+  return s === 'missed' ? 'No answer' : 'Cancelled ' + t;
+};
+const snip = (m) => (m.type === 'text' ? m.text : m.type === 'image' ? 'Photo' : m.type === 'video' ? 'Video' : m.type === 'voice' ? 'Voice message' : 'Call');
+const EMOJI = ['😀', '😂', '🥰', '😍', '😎', '🤔', '😮', '😢', '🙏', '👍', '👏', '🔥', '🎉', '💜', '✨', '🌞'];
+const REACT = ['❤️', '😂', '👍', '😮', '😢', '🙏'];
+const WAVE = Array.from({ length: 23 }, (_, i) => <s key={i} style={{ height: 14 + Math.round(Math.abs(Math.sin(i * 0.55)) * 40), animationDelay: (i % 8) * 0.09 + 's' }} />);
+
+function VoicePlayer({ url, dur }) {
+  const [on, setOn] = useState(false);
+  const a = useRef(null);
+  const toggle = () => { const el = a.current; if (!el) return; if (el.paused) el.play().catch(() => {}); else el.pause(); };
+  return (
+    <>
+      <button type="button" className="vp" aria-label={on ? 'Pause voice message' : 'Play voice message'} onClick={toggle}><MIc n={on ? 'pause' : 'play'} size={14} /></button>
+      <span className={'wv' + (on ? ' on' : '')} aria-hidden="true">{[8, 16, 10, 22, 12, 18, 8, 20, 14, 9, 17, 11].map((h, i) => <s key={i} style={{ height: h }} />)}</span>
+      <span>{mmss(dur || 0)}</span>
+      <audio ref={a} src={url} preload="metadata" onPlay={() => setOn(true)} onPause={() => setOn(false)} onEnded={() => setOn(false)} />
+    </>
+  );
+}
+
+function Chat({ me, names, ice, blob, onLogout, onResync }) {
+  const connT = useRef(0);
+  const callTok = useRef(0);
+  const ackR = useRef('');
+  const discT = useRef(null);
+  const micR = useRef(false);
+  const sendingR = useRef(false);
+  const pendingR = useRef(null); // { t, cid } of a send that failed, so a retry of the same text is not stored twice
+  const seenSentR = useRef('');
+  const [peerSeen, setPeerSeen] = useState('');
+  const [vn, setVn] = useState(null); // seconds recorded while a voice message is being recorded, else null
+  const vnR = useRef({ rec: null, chunks: [], stream: null, timer: null, t0: 0, send: false });
+  const peer = me === 'A' ? 'B' : 'A';
+  // Every message post states who this tab thinks it is; the server rejects it (409) if the session cookie says otherwise
+  const postMsg = async (body) => {
+    const r = await post('/api/messages', { ...body, as: me });
+    if (r.status === 409) onResync();
+    return r;
+  };
+  const [msgs, setMsgs] = useState([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState('');
+  const [left, setLeft] = useState(IDLE_MS / 1000);
+  const [now, setNow] = useState(Date.now());
+  const [call, setCallState] = useState({ phase: 'idle' });
+  const [link, setLink] = useState('');
+  const [muted, setMuted] = useState(false);
+  const [camOff, setCamOff] = useState(false);
+
+  const callR = useRef({ phase: 'idle' });
+  const busyR = useRef(false);
+  const lastIdR = useRef('');
+  const firstR = useRef(true);
+  const actR = useRef(Date.now());
+  const timerR = useRef(null);
+  const tickR = useRef(null);
+  const pcR = useRef(null);
+  const localS = useRef(null);
+  const remoteS = useRef(null);
+  const answeredR = useRef(false);
+  const listR = useRef(null);
+  const localV = useRef(null);
+  const remoteV = useRef(null);
+  const aliveR = useRef(true);
+
+  const setCall = (c) => { callR.current = c; setCallState(c); };
+  const activity = () => { actR.current = Date.now(); };
+
+  const teardown = useCallback((st) => {
+    const c = callR.current;
+    if (c.dir === 'out' && c.id && c.phase !== 'idle') {
+      const dur = connT.current ? Math.round((Date.now() - connT.current) / 1000) : 0;
+      postMsg({ type: 'call', video: !!c.video, status: c.phase === 'connected' ? 'done' : (st || 'cancelled'), dur }).catch(() => {});
+    }
+    connT.current = 0;
+    clearTimeout(discT.current); ackR.current = '';
+    try { pcR.current && pcR.current.close(); } catch {}
+    pcR.current = null;
+    if (localS.current) localS.current.getTracks().forEach((t) => t.stop());
+    localS.current = null; remoteS.current = null; answeredR.current = false;
+    setLink(''); setMuted(false); setCamOff(false);
+    setCall({ phase: 'idle' });
+  }, []);
+
+  const hangup = useCallback(async (st) => {
+    const id = callR.current.id;
+    teardown(st);
+    try { await post('/api/call', { action: 'end', id }); } catch {}
+  }, [teardown]);
+
+  const logout = useCallback(async () => {
+    aliveR.current = false;
+    clearTimeout(timerR.current);
+    if (callR.current.phase !== 'idle') await hangup();
+    onLogout();
+  }, [hangup, onLogout]);
+
+  // ---------- WebRTC ----------
+  function makePC(stream) {
+    const pc = new RTCPeerConnection({ iceServers: ice });
+    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+    pc.ontrack = (e) => {
+      remoteS.current = e.streams[0];
+      if (remoteV.current) remoteV.current.srcObject = e.streams[0];
+    };
+    pc.onconnectionstatechange = () => {
+      if (pcR.current !== pc) return;
+      const st = pc.connectionState;
+      setLink(st);
+      clearTimeout(discT.current);
+      if (st === 'failed') hangup();
+      // A brief "disconnected" is normal on mobile networks; end the call only if it does not recover
+      else if (st === 'disconnected') discT.current = setTimeout(() => { if (pcR.current === pc && pc.connectionState !== 'connected') hangup(); }, 12000);
+    };
+    pcR.current = pc;
+    return pc;
+  }
+
+  function waitIce(pc) {
+    return new Promise((res) => {
+      if (pc.iceGatheringState === 'complete') return res();
+      const t = setTimeout(res, 3500);
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); }
+      });
+    });
+  }
+
+  async function getMedia(video) {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+      video: video ? { facingMode: 'user' } : false,
+    });
+    localS.current = stream;
+    return stream;
+  }
+
+  const mediaErr = (e) =>
+    e && e.name === 'NotAllowedError' ? 'Please allow microphone and camera access in your browser settings.'
+      : e && e.name === 'NotFoundError' ? 'No microphone or camera was found.' : 'The call could not be started.';
+
+  async function startCall(video) {
+    if (callR.current.phase !== 'idle') return;
+    stopVoiceNote(false);
+    activity();
+    const tok = ++callTok.current;
+    const stale = () => callTok.current !== tok || callR.current.phase !== 'calling';
+    setCall({ phase: 'calling', video, dir: 'out' });
+    try {
+      const stream = await getMedia(video);
+      // Cancelled while the permission prompt was open: release the mic/camera right away
+      if (stale()) { stream.getTracks().forEach((t) => t.stop()); if (callTok.current === tok) teardown(); return; }
+      const pc = makePC(stream);
+      await pc.setLocalDescription(await pc.createOffer());
+      await waitIce(pc);
+      if (stale()) { if (callTok.current === tok) teardown(); return; }
+      const r = await post('/api/call', { action: 'start', video, offer: pc.localDescription });
+      if (!r.ok) { if (!stale()) { teardown(); alert(r.status === 409 ? 'A call is already in progress.' : 'The call could not be started.'); } return; }
+      const { id } = await r.json();
+      // Cancelled while the request was in flight: end the call that was just created so it does not keep ringing
+      if (stale()) { post('/api/call', { action: 'end', id }).catch(() => {}); return; }
+      setCall({ ...callR.current, id, idAt: Date.now() });
+    } catch (e) {
+      if (callTok.current !== tok) return; // a newer call has taken over
+      const wasCalling = callR.current.phase === 'calling';
+      teardown();
+      if (wasCalling) alert(mediaErr(e));
+    }
+  }
+
+  async function accept() {
+    const cur = callR.current;
+    if (cur.phase !== 'incoming') return;
+    stopVoiceNote(false);
+    connT.current = Date.now();
+    setCall({ ...cur, phase: 'connected' });
+    try {
+      const stream = await getMedia(cur.video);
+      const pc = makePC(stream);
+      await pc.setRemoteDescription(cur.offer);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await waitIce(pc);
+      const r = await post('/api/call', { action: 'answer', id: cur.id, answer: pc.localDescription });
+      if (!r.ok) { teardown(); alert('This call has already ended.'); }
+    } catch (e) { await hangup(); alert(mediaErr(e)); }
+  }
+
+  async function handleCall(c) {
+    const cur = callR.current;
+    if (!c || c.status === 'ended') {
+      // A poll that was already in flight when the call was created can legitimately report "no call";
+      // only trust a missing call once the call has existed for a few seconds.
+      const settled = Date.now() - (cur.idAt || 0) > 4000;
+      if (cur.id && ((!c && settled) || (c && c.id === cur.id))) teardown(cur.phase === 'calling' ? 'declined' : undefined);
+      return;
+    }
+    if (c.status === 'ringing') {
+      if (c.to === me && cur.phase === 'idle' && c.age < 60000) {
+        setCall({ phase: 'incoming', dir: 'in', id: c.id, idAt: Date.now(), video: c.video, offer: c.offer });
+      } else if (c.to === me && cur.phase === 'incoming' && c.age >= 60000) {
+        teardown();
+      } else if (c.from === me && cur.phase === 'calling' && c.age >= 60000) {
+        hangup('missed'); alert('No answer.');
+      }
+    } else if (c.status === 'active' && c.from === me && cur.phase === 'calling' && c.answer && !answeredR.current) {
+      answeredR.current = true;
+      ackR.current = c.id; // tell the server we have the answer so it stops sending it
+      try {
+        await pcR.current.setRemoteDescription(c.answer);
+        connT.current = Date.now();
+        setCall({ ...callR.current, phase: 'connected' });
+      } catch { hangup(); }
+    }
+  }
+
+  // While connected, send a heartbeat so a call abandoned without a clean hang-up never blocks new calls
+  useEffect(() => {
+    if (call.phase !== 'connected' || !call.id) return;
+    const ping = () => post('/api/call', { action: 'ping', id: call.id }).catch(() => {});
+    ping();
+    const iv = setInterval(ping, 10000);
+    return () => clearInterval(iv);
+  }, [call.phase, call.id]);
+
+  // Closing the tab or navigating away mid-call ends the call for the other person too
+  useEffect(() => {
+    const h = () => {
+      const c = callR.current;
+      if (c.phase === 'idle' || !c.id) return;
+      try { navigator.sendBeacon('/api/call', new Blob([JSON.stringify({ action: 'end', id: c.id })], { type: 'application/json' })); } catch {}
+    };
+    window.addEventListener('pagehide', h);
+    return () => window.removeEventListener('pagehide', h);
+  }, []);
+
+  // Attach streams to the video elements when the call screen opens
+  useEffect(() => {
+    if (localV.current && localS.current) localV.current.srcObject = localS.current;
+    if (remoteV.current && remoteS.current) remoteV.current.srcObject = remoteS.current;
+  }, [call.phase]);
+
+  function toggleMic() {
+    const t = localS.current && localS.current.getAudioTracks()[0];
+    if (t) { t.enabled = !t.enabled; setMuted(!t.enabled); }
+  }
+  function toggleCam() {
+    const t = localS.current && localS.current.getVideoTracks()[0];
+    if (t) { t.enabled = !t.enabled; setCamOff(!t.enabled); }
+  }
+
+  // ---------- polling (auto refresh) ----------
+  useEffect(() => {
+    aliveR.current = true;
+    let running = false, again = false;
+    async function tick() {
+      // Never run two polls at once. A second request just schedules a quick follow-up poll, so
+      // "refresh now" calls cannot multiply the polling loop.
+      if (running) { again = true; return; }
+      running = true;
+      clearTimeout(timerR.current);
+      try {
+        const ack = ackR.current ? '&ack=' + encodeURIComponent(ackR.current) : '';
+        // Tell the server which message we have seen, but only while the tab is actually visible
+        const sentId = lastIdR.current;
+        const seenQ = sentId && sentId !== seenSentR.current && document.visibilityState === 'visible' ? '&seen=' + encodeURIComponent(sentId) : '';
+        const r = await fetch('/api/poll?since=' + encodeURIComponent(sentId) + ack + seenQ, { cache: 'no-store' });
+        if (r.status === 401) { logout(); return; }
+        if (!r.ok) return; // temporary server error: keep any call running and try again shortly
+        const d = await r.json();
+        if (!aliveR.current) return;
+        // The session cookie now belongs to the other person (shared browser): stop and reload identity instead of mixing senders
+        if (d.me && d.me !== me) { onResync(); return; }
+        if (seenQ) seenSentR.current = sentId;
+        setPeerSeen(typeof d.peerSeen === 'string' ? d.peerSeen : '');
+        if (d.messages) {
+          if (!firstR.current) activity(); // a new message arrived or was sent
+          firstR.current = false;
+          lastIdR.current = d.lastId;
+          setMsgs(normalizeMessages(d.messages));
+        }
+        firstR.current = false;
+        await handleCall(d.call || null);
+      } catch {} finally {
+        running = false;
+        if (aliveR.current) {
+          const wait = again ? 100 : callR.current.phase === 'idle' ? 2500 : 1000;
+          again = false;
+          timerR.current = setTimeout(tick, wait);
+        }
+      }
+    }
+    tickR.current = tick;
+    tick();
+    return () => { aliveR.current = false; clearTimeout(timerR.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- idle logout (1 minute without activity) ----------
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (callR.current.phase !== 'idle' || busyR.current || micR.current) actR.current = Date.now();
+      const rem = Math.ceil((IDLE_MS - (Date.now() - actR.current)) / 1000);
+      setLeft(Math.max(rem, 0));
+      setNow(Date.now());
+      if (rem <= 0) { clearInterval(iv); logout(); }
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [logout]);
+
+  useEffect(() => {
+    if (listR.current) listR.current.scrollTop = listR.current.scrollHeight;
+  }, [msgs.length]);
+
+  // ---------- sending ----------
+  async function send(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const t = text.trim();
+    if (!t || sendingR.current) return;
+    sendingR.current = true;
+    voiceR.current.halt(); // stop dictation so late speech results cannot refill the box
+    const rt = replyTo;
+    setText(''); setReplyTo(null); activity();
+    // One id per message: if the request reached the server but the reply was lost, the retry cannot create a duplicate
+    const pc = pendingR.current;
+    const cid = pc && pc.t === t ? pc.cid : (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2, 10));
+    pendingR.current = { t, cid };
+    try {
+      const r = await postMsg({ type: 'text', cid, text: t, reply: rt ? { from: rt.from, who: rt.from === me ? 'You' : names[peer], text: snip(rt) } : undefined });
+      if (!r.ok) throw new Error('send failed');
+      pendingR.current = null;
+      tickR.current && tickR.current();
+    } catch {
+      // Do not lose the user's message: put it back so it can be sent again
+      setText((cur) => (cur ? t + ' ' + cur : t)); setReplyTo(rt);
+      toast('Message not sent. Please try again.');
+    } finally { sendingR.current = false; }
+  }
+
+  async function uploadFile(f) {
+    if (blob) {
+      const b = await upload(f.name, f, { access: 'public', handleUploadUrl: '/api/upload', contentType: f.type });
+      return b.url;
+    }
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('/api/upload-local', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('upload failed');
+    return (await r.json()).url;
+  }
+
+  // ---------- voice messages (record and send) ----------
+  async function startVoiceNote() {
+    setPop('');
+    const st = vnR.current;
+    if (st.rec) return;
+    if (callR.current.phase !== 'idle') return toast('Voice messages are not available during a call.');
+    voiceR.current.halt();
+    if (!navigator.mediaDevices || !window.MediaRecorder) return toast('Voice messages are not supported in this browser.');
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
+    catch (e) { return toast(e && e.name === 'NotAllowedError' ? 'Please allow microphone access in your browser settings.' : 'No microphone was found.'); }
+    if (st.rec) { stream.getTracks().forEach((t) => t.stop()); return; }
+    const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    const mime = types.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+    let rec;
+    try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
+    catch { stream.getTracks().forEach((t) => t.stop()); return toast('Voice messages are not supported in this browser.'); }
+    st.rec = rec; st.chunks = []; st.stream = stream; st.send = false; st.t0 = Date.now();
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) st.chunks.push(e.data); };
+    rec.onstop = () => finishVoiceNote(rec, mime);
+    micR.current = true; setVn(0); activity();
+    try { rec.start(1000); } catch { finishVoiceNote(rec, mime); return toast('Voice messages could not be started.'); }
+    st.timer = setInterval(() => {
+      const secs = Math.floor((Date.now() - st.t0) / 1000);
+      setVn(secs); activity();
+      if (secs >= 300) stopVoiceNote(true); // 5 minute limit
+    }, 500);
+  }
+  function stopVoiceNote(send) {
+    const st = vnR.current;
+    if (!st.rec) return;
+    st.send = send;
+    try { st.rec.stop(); } catch { finishVoiceNote(st.rec, ''); }
+  }
+  async function finishVoiceNote(rec, mime) {
+    const st = vnR.current;
+    if (st.rec !== rec) return;
+    clearInterval(st.timer);
+    if (st.stream) st.stream.getTracks().forEach((t) => t.stop());
+    const send = st.send, chunks = st.chunks, dur = Math.round((Date.now() - st.t0) / 1000);
+    st.rec = null; st.chunks = []; st.stream = null; micR.current = false; setVn(null);
+    if (!send) return;
+    if (dur < 1 || !chunks.length) return toast('Recording is too short.');
+    const type = (rec.mimeType || mime || 'audio/webm').split(';')[0];
+    const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+    const file = new File([new Blob(chunks, { type })], `voice-${Date.now()}.${ext}`, { type });
+    activity(); busyR.current = true; setBusy('Sending voice message…');
+    try {
+      const url = await uploadFile(file);
+      const m = await postMsg({ type: 'voice', url, dur });
+      if (!m.ok) throw new Error('send failed');
+      tickR.current && tickR.current();
+    } catch { toast('The voice message could not be sent. Please try again.'); }
+    busyR.current = false; setBusy(''); activity();
+  }
+  useEffect(() => () => {
+    const st = vnR.current;
+    if (!st.rec) return;
+    st.send = false; clearInterval(st.timer);
+    try { st.rec.stop(); } catch {}
+    if (st.stream) st.stream.getTracks().forEach((t) => t.stop());
+    micR.current = false;
+  }, []);
+
+  async function onFile(e) {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    const type = f.type.startsWith('image/') ? 'image' : f.type.startsWith('video/') ? 'video' : null;
+    if (!type) return alert('You can only send images or videos.');
+    if (f.size > 50 * 1024 * 1024) return alert('The file must be smaller than 50 MB.');
+    activity(); busyR.current = true; setBusy('Uploading…');
+    try {
+      const url = await uploadFile(f);
+      const m = await postMsg({ type, url });
+      if (!m.ok) throw new Error('could not send');
+      tickR.current && tickR.current();
+    } catch (err) { alert('Upload failed' + (err && err.message ? ': ' + err.message : '.')); }
+    busyR.current = false; setBusy(''); activity();
+  }
+
+  const hoursLeft = (m) => Math.max(1, Math.ceil((m.expiresAt - now) / 3600000));
+  const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  const [spk, setSpk] = useState(true);
+  const toggleSpk = () => { const v = remoteV.current; if (v) { v.muted = spk; } setSpk(!spk); };
+  const [rx, setRx] = useState({});
+  const [hid, setHid] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
+  const [menu, setMenu] = useState(null);
+  const [pop, setPop] = useState('');
+  const [list, setList] = useState(false);
+  const [toastT, setToast] = useState('');
+  const [ui, setUi] = useState(true);
+  const taR = useRef(null), fiR = useRef(null), fcR = useRef(null), lp = useRef(0), swy = useRef(null), uiT = useRef(0);
+  const toast = (t) => { setToast(t); setTimeout(() => setToast(''), 1800); };
+  const [rec, setRec] = useState(false);
+  const [lang, setLang] = useState('hi-IN');
+  const textR = useRef('');
+  textR.current = text;
+  const voiceR = useRef(null);
+  if (!voiceR.current) {
+    voiceR.current = createVoiceTyping({
+      getText: () => textR.current,
+      setText: (v) => setText(v),
+      onState: (v) => setRec(v),
+      onBusy: (v) => { micR.current = v; },
+      onToast: (m) => toast(m),
+      onActivity: () => activity(),
+      canStart: () => (callR.current.phase !== 'idle' ? 'Voice typing is not available during a call.' : null),
+    });
+  }
+  const startRec = () => voiceR.current.start();
+  const stopRec = () => voiceR.current.stop();
+  const swapLang = () => setLang(voiceR.current.swap());
+  useEffect(() => {
+    const v = voiceR.current;
+    const h = (e) => { if (e.key === 'Escape') v.stop(); };
+    document.addEventListener('keydown', h);
+    return () => { document.removeEventListener('keydown', h); v.halt(); };
+  }, []);
+  const vconn = !!call.video && call.phase === 'connected' && link === 'connected';
+  useEffect(() => {
+    if (!vconn) return;
+    setUi(true);
+    const t = setTimeout(() => setUi(false), 3500);
+    return () => clearTimeout(t);
+  }, [vconn]);
+  useEffect(() => { const t = taR.current; if (!t) return; t.style.height = 'auto'; if (text) t.style.height = Math.min(t.scrollHeight, 120) + 'px'; else t.style.height = ''; }, [text]);
+
+  const openMenu = (kind, m, el) => {
+    const r = el.getBoundingClientRect(), w = 220, h = kind === 'msg' ? 230 : 210;
+    let y = r.top - h - 8; if (y < 8) y = Math.min(r.bottom + 8, innerHeight - h - 8);
+    setPop('');
+    setMenu({ kind, m, y, x: Math.max(8, Math.min(r.left + (r.width - w) / 2, innerWidth - w - 8)) });
+  };
+  const heart = (m) => setRx((r) => ({ ...r, [m.id]: r[m.id] ? null : '❤️' }));
+  const visible = msgs.filter((m) => !hid.includes(m.id));
+  const peerSeenTs = peerSeen ? Number(peerSeen.split('-')[0]) || 0 : 0; // messages up to this time were seen by the other person
+  const last = visible[visible.length - 1];
+
+  const renderCall = () => {
+    const v = !!call.video, inc = call.phase === 'incoming', on = call.phase === 'connected', live = on && link === 'connected';
+    const secs = connT.current ? Math.max(0, Math.floor((now - connT.current) / 1000)) : 0;
+    const status = inc ? `Incoming ${v ? 'video' : 'voice'} call…` : live ? mmss(secs) : on ? 'Connecting…' : v ? 'Video calling…' : 'Calling…';
+    const B = (cls, icon, label, fn) => (
+      <div className="cw"><button type="button" className={'cb ' + cls} aria-label={label} aria-pressed={cls === 'on' ? true : undefined} onClick={fn}><MIc n={icon} size={24} /></button><span>{label}</span></div>
+    );
+    return (
+      <section className={'call' + (v ? ' vid' : '') + (vconn ? ' conn' : '') + (inc ? ' in' : '') + (vconn && !ui ? ' idle' : '')} aria-label="Call"
+        onClick={() => { setUi(true); clearTimeout(uiT.current); uiT.current = setTimeout(() => setUi(false), 3500); }}>
+        <video ref={remoteV} className="remote" autoPlay playsInline style={{ display: vconn ? 'block' : 'none' }} />
+        {v && on && <div className={'pip live' + (camOff ? ' off' : '')}><video ref={localV} autoPlay playsInline muted /></div>}
+        <div className="ctop">
+          <div className="big"><MIc n="user" size={vconn ? 40 : 56} /></div>
+          <h2>{names[peer]}</h2>
+          <p aria-live="polite">{status}</p>
+          {!v && !inc && <div className="wf" aria-hidden="true">{WAVE}</div>}
+        </div>
+        <div className={'ctl' + (inc ? ' inc' : '')}>
+          {inc ? (<>{B('red', 'phone', 'Decline', () => hangup())}{B('grn', v ? 'video' : 'phone', 'Accept', accept)}</>) : (
+            <>{B(muted ? 'on' : '', muted ? 'micoff' : 'mic', 'Mute', toggleMic)}
+              {v && B(camOff ? 'on' : '', camOff ? 'camoff' : 'video', 'Camera', toggleCam)}
+              {B(!spk ? 'on' : '', 'speaker', 'Speaker', toggleSpk)}
+              {B('red', 'phone', 'End', () => hangup())}</>
+          )}
+        </div>
+        <div className="swh" role="presentation"
+          onPointerDown={(e) => { swy.current = e.clientY; e.currentTarget.setPointerCapture(e.pointerId); }}
+          onPointerMove={(e) => { if (swy.current !== null && swy.current - e.clientY > 90) { swy.current = null; accept(); } }}
+          onPointerUp={() => { swy.current = null; }}><MIc n="up" size={18} />Swipe up to answer</div>
+      </section>
+    );
+  };
+
+  return (
+    <div className="mchat-wrap"><div className={'mchat' + (list ? ' show-list' : '')}
+      onPointerDown={(e) => { if (!e.target.closest('.menu,.pop,[data-pop]')) { setMenu(null); setPop(''); } }}>
+      <aside className="side" aria-label="Conversations">
+        <div className="sh"><h1 className="brand">Morning</h1></div>
+        <button className="ci" onClick={() => { setList(false); taR.current && taR.current.focus(); }}>
+          <div className="av"><MIc n="user" /></div>
+          <div className="mid"><b>{names[peer]}</b><small>{last ? snip(last) : 'No messages yet'}</small></div>
+          <time>{last ? hm(last.createdAt) : ''}</time>
+        </button>
+        <div className="sf"><MIc n="lock" size={16} />Private chat · photos &amp; videos delete in 24h</div>
+      </aside>
+      <main className="chat">
+        <header className="hd">
+          <button className="ib flat back" aria-label="Back to chats" onClick={() => setList(true)}><MIc n="arrow" /></button>
+          <div className="who">
+            <div className="av"><MIc n="user" size={24} /></div>
+            <div style={{ minWidth: 0 }}><div className="nm">{names[peer]} <MIc n="badge" size={18} /></div><div className="st">Private &amp; secure</div></div>
+          </div>
+          <button className="ib" aria-label="Voice call" onClick={() => startCall(false)}><MIc n="phone" size={20} /></button>
+          <button className="ib" aria-label="Video call" onClick={() => startCall(true)}><MIc n="video" size={20} /></button>
+          <button className="ib flat" aria-label="Log out" title="Log out" onClick={() => logout()}><MIc n="logout" size={20} /></button>
+        </header>
+        <div className="feed" ref={listR} role="log" aria-live="polite">
+          <span className="pill"><MIc n="lock" size={14} />Private chat</span>
+          <span className={'pill' + (left <= 15 ? ' low' : '')}>Auto logout in {clock}</span>
+          {visible.length === 0 && <span className="pill">Today</span>}
+          {visible.map((m, i) => {
+            const showDay = i === 0 || dayKey(visible[i - 1].createdAt) !== dayKey(m.createdAt);
+            const row = (() => {
+            const mine = m.from === me;
+            if (m.type === 'call') {
+              const st = m.status, miss = !mine && (st === 'missed' || st === 'cancelled'), bad = st !== 'done';
+              return (
+                <div key={m.id} className="row evrow">
+                  <div className={'ev ' + (miss ? 'miss' : bad ? 'neu' : '')} role="button" tabIndex={0} aria-label={callTitle(m, mine) + '. Open details'}
+                    onClick={(e) => openMenu('ev', m, e.currentTarget)} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.click()}>
+                    <i><MIc n={m.video ? 'video' : 'phone'} size={20} /></i>
+                    <div><b>{callTitle(m, mine)}</b><small>{mine ? 'Outgoing' : 'Incoming'}{st === 'done' ? ' · ' + mmss(m.dur || 0) : ''}</small><small>{hm(m.createdAt)}</small></div>
+                    {bad && <button className="evb" onClick={(e) => { e.stopPropagation(); startCall(!!m.video); }}>{miss ? 'Call back' : 'Call again'}</button>}
+                  </div>
+                </div>
+              );
+            }
+            const gone = m.type !== 'text' && (m.expired || !m.url || (m.expiresAt && m.expiresAt < now));
+            const body = m.type === 'text' ? <span dir="auto" style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>
+              : gone ? <span className="fl"><i><MIc n="image" size={20} /></i><span>Deleted after 24 hours</span></span>
+              : m.type === 'voice' ? <VoicePlayer url={m.url} dur={m.dur} />
+              : m.type === 'image' ? <img src={m.url} alt="Shared photo" loading="lazy" />
+              : <video src={m.url} controls playsInline preload="metadata" style={{ maxWidth: '100%', borderRadius: 14, display: 'block' }} />;
+            return (
+              <div key={m.id} className={'row ' + (mine ? 'out' : 'in')}>
+                {!mine && <div className="sa"><MIc n="user" size={16} /></div>}
+                <div className="col">
+                  <div className={'bub' + (m.type === 'image' || m.type === 'video' ? ' media' : '')} tabIndex={0} role="button" aria-label={`${mine ? 'You' : names[peer]}: ${snip(m)}. Press Enter for options`}
+                    onContextMenu={(e) => { e.preventDefault(); openMenu('msg', m, e.currentTarget); }}
+                    onDoubleClick={() => heart(m)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { e.preventDefault(); openMenu('msg', m, e.currentTarget); } }}
+                    onPointerDown={(e) => { const el = e.currentTarget; lp.current = setTimeout(() => openMenu('msg', m, el), 450); }}
+                    onPointerUp={() => clearTimeout(lp.current)} onPointerLeave={() => clearTimeout(lp.current)} onPointerCancel={() => clearTimeout(lp.current)}>
+                    {m.reply && <div className="quote"><b>{quotedAuthor(m) === me ? 'You' : names[quotedAuthor(m) || peer]}</b>{m.reply.text}</div>}
+                    {body}
+                    <span className="meta">{m.expiresAt && !gone ? `Deletes in ${hoursLeft(m)}h · ` : ''}{hm(m.createdAt)}{mine && <span className={'tk' + (peerSeenTs && m.createdAt <= peerSeenTs ? ' read' : '')}><MIc n={peerSeenTs && m.createdAt <= peerSeenTs ? 'cc' : 'check'} size={15} /></span>}</span>
+                  </div>
+                  {rx[m.id] && <span className="rx">{rx[m.id]}</span>}
+                </div>
+              </div>
+            );
+            })();
+            return <Fragment key={m.id}>{showDay && <span className="pill">{dayLabel(m.createdAt)}</span>}{row}</Fragment>;
+          })}
+        </div>
+        <div className={'toast' + (toastT ? ' on' : '')} role="status">{toastT}</div>
+        <footer className="comp">
+          {replyTo && <div className="rb"><MIc n="reply" size={18} /><div><b>{replyTo.from === me ? 'You' : names[peer]}</b><span>{snip(replyTo)}</span></div><button type="button" className="fb" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><MIc n="x" size={18} /></button></div>}
+          {rec && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Listening…</b><span>{lang === 'hi-IN' ? 'Hindi' : 'English'} · speak and your words will appear as text</span></div><button type="button" className="fb" aria-label="Switch language" onClick={swapLang}>{lang === 'hi-IN' ? 'HI' : 'EN'}</button></div>}
+          {vn !== null && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Recording voice message…</b><span>{mmss(vn)}</span></div><button type="button" className="fb" aria-label="Cancel recording" onClick={() => stopVoiceNote(false)}><MIc n="x" size={18} /></button><button type="button" className="fb" aria-label="Send voice message" onClick={() => stopVoiceNote(true)}><MIc n="send" size={18} /></button></div>}
+          {busy && <div className="rb"><span>{busy}</span></div>}
+          <div className={'pop att' + (pop === 'pa' ? ' on' : '')}>
+            <button type="button" onClick={() => { fiR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#a070ff,#6a3df0)' }}><MIc n="image" /></i>Photo / Video</button>
+            <button type="button" onClick={() => { fcR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#ff8ab4,#e0489a)' }}><MIc n="camera" /></i>Camera</button>
+            <button type="button" onClick={startVoiceNote}><i style={{ background: 'linear-gradient(135deg,#34d399,#059669)' }}><MIc n="mic" /></i>Voice message</button>
+          </div>
+          <div className={'pop emo' + (pop === 'pe' ? ' on' : '')} style={{ left: 12 }}>
+            {EMOJI.map((e) => <button key={e} type="button" aria-label={'Insert ' + e} onClick={() => { setText((t) => t + e); taR.current && taR.current.focus(); }}>{e}</button>)}
+          </div>
+          <form className="cr" onSubmit={send}>
+            <button type="button" className="ib" data-pop="pa" aria-label="Attach" aria-expanded={pop === 'pa'} onClick={() => { setMenu(null); setPop((p) => (p === 'pa' ? '' : 'pa')); }}><MIc n="plus" /></button>
+            <div className="fld">
+              <button type="button" className="fb" data-pop="pe" aria-label="Emoji" onClick={() => { setMenu(null); setPop((p) => (p === 'pe' ? '' : 'pe')); }}><MIc n="smile" /></button>
+              <textarea ref={taR} rows={1} placeholder="Type a message..." aria-label="Message" maxLength={2000} value={text} dir="auto"
+                onChange={(e) => { setText(e.target.value); voiceR.current.rebase(); activity(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                // Enter sends, but not while an input method (Hindi/Indic, Chinese, Japanese, Korean...) is still composing a word
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); send(e); } }} />
+              <button type="button" className="fb clip" aria-label="Attach photo or video" onClick={() => fiR.current.click()}><MIc n="clip" size={20} /></button>
+              <button type="button" className="fb" aria-label="Open camera" onClick={() => fcR.current.click()}><MIc n="camera" size={20} /></button>
+            </div>
+            {rec
+              ? <button className="act listening" type="button" aria-label="Stop voice typing" onClick={stopRec}><MIc n="mic" /></button>
+              : text.trim()
+                ? <button className="act" type="submit" aria-label="Send message"><MIc n="send" /></button>
+                : <button className="act" type="button" aria-label="Start voice typing" onClick={startRec}><MIc n="mic" /></button>}
+          </form>
+          <input ref={fiR} type="file" accept="image/*,video/*" hidden onChange={onFile} />
+          <input ref={fcR} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFile} />
+        </footer>
+        {call.phase !== 'idle' && renderCall()}
+      </main>
+      {menu && (
+        <div className="menu" style={{ top: menu.y, left: menu.x }}>
+          {menu.kind === 'msg' ? (
+            <>
+              <div className="qr">{REACT.map((e) => <button key={e} className={rx[menu.m.id] === e ? 'sel' : ''} aria-label={'React ' + e} onClick={() => { setRx((r) => ({ ...r, [menu.m.id]: r[menu.m.id] === e ? null : e })); setMenu(null); }}>{e}</button>)}</div>
+              <button onClick={() => { setReplyTo(menu.m); setMenu(null); taR.current && taR.current.focus(); }}><MIc n="reply" size={18} />Reply</button>
+              {menu.m.type === 'text' && <button onClick={() => { try { navigator.clipboard.writeText(menu.m.text).then(() => toast('Copied'), () => toast('Could not copy')); } catch { toast('Could not copy'); } setMenu(null); }}><MIc n="copy" size={18} />Copy</button>}
+              <button className="dng" onClick={() => { setHid((h) => [...h, menu.m.id]); setMenu(null); }}><MIc n="trash" size={18} />Delete for me</button>
+            </>
+          ) : (
+            <>
+              <div style={{ padding: '10px 12px 6px' }}><b>{callTitle(menu.m, menu.m.from === me)}</b></div>
+              {[['Type', menu.m.video ? 'Video' : 'Voice'], ['Direction', menu.m.from === me ? 'Outgoing' : 'Incoming'], ['Duration', menu.m.status === 'done' ? mmss(menu.m.dur || 0) : '—'], ['Time', dayLabel(menu.m.createdAt) + ', ' + hm(menu.m.createdAt)]].map(([a, b]) => <div className="dr" key={a}><span>{a}</span><b>{b}</b></div>)}
+              <button onClick={() => { const v = !!menu.m.video; setMenu(null); startCall(v); }}><MIc n={menu.m.video ? 'video' : 'phone'} size={18} />Call again</button>
+            </>
+          )}
+        </div>
+      )}
+    </div></div>
+  );
+}
