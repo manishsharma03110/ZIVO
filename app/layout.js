@@ -7,17 +7,17 @@ const site = process.env.SITE_URL
 
 export const metadata = {
   metadataBase: new URL(site),
-  title: 'ZIVO | Fresh Groceries & Daily Essentials Delivered Fast',
+  title: 'ZIVO Ration| Fresh Groceries & Daily Essentials Delivered Fast',
   description:
-    'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
+    'Shop fresh groceries and daily essentials with ZIVO Ration. Get everything you need delivered fast, right when you need it.',
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
   verification: {
     google: 'ZZrkSleHno7C4YALGV4L6VJ5isu3xs2XLxGcWkFjFTs',
   },
   openGraph: {
-    title: 'ZIVO | Fresh Groceries & Daily Essentials Delivered Fast',
-    description: 'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
+    title: 'ZIVO Ration | Fresh Groceries & Daily Essentials Delivered Fast',
+    description: 'Shop fresh groceries and daily essentials with ZIVO Ration. Get everything you need delivered fast, right when you need it.',
     type: 'website',
     url: '/',
   },
