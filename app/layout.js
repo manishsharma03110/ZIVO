@@ -7,7 +7,7 @@ const site = process.env.SITE_URL
 
 export const metadata = {
   metadataBase: new URL(site),
-  title: 'ZIVO Ration| Fresh Groceries & Daily Essentials Delivered Fast',
+  title: 'ZIVO Ration | Fresh Groceries & Daily Essentials Delivered Fast',
   description:
     'Shop fresh groceries and daily essentials with ZIVO Ration. Get everything you need delivered fast, right when you need it.',
   alternates: { canonical: '/' },
