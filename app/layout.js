@@ -12,14 +12,14 @@ export const metadata = {
     'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
   alternates: { canonical: '/' },
   robots: { index: true, follow: true },
+  verification: {
+    google: 'ZZrkSleHno7C4YALGV4L6VJ5isu3xs2XLxGcWkFjFTs',
+  },
   openGraph: {
     title: 'ZIVO | Fresh Groceries & Daily Essentials Delivered Fast',
     description: 'Shop fresh groceries and daily essentials with ZIVO. Get everything you need delivered fast, right when you need it.',
     type: 'website',
     url: '/',
-    verification: {
-  google: "ZZrkSleHno7C4YALGV4L6VJ5isu3xs2XLxGcWkFjFTs",
-},
   },
 };
 
