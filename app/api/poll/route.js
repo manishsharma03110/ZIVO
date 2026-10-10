@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession, makeCookieValue, cookieOptions, other } from '@/lib/auth';
 import { kvMget, kvSet, listLast } from '@/lib/store';
-import { deleteMedia, purgeOldMessages, MESSAGE_TTL_MS } from '@/lib/media';
+import { MESSAGE_TTL_MS } from '@/lib/media';
 import { safe } from '@/lib/http';
 
 const unauthorized = () => NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: { 'cache-control': 'no-store' } });
@@ -27,18 +27,10 @@ export const GET = safe(async (req) => {
   let out = null, lastId = since;
   if (!(typeof last === 'string' && last && last === since)) {
     const all = await listLast('msgs', 100);
-    // Retention: hide messages past MESSAGE_TTL_DAYS (and purge them from storage below)
+    // Retention: hide expired messages on read, but keep cleanup in the cron path to avoid expensive hot-path work.
     const cutoff = MESSAGE_TTL_MS ? now - MESSAGE_TTL_MS : 0;
     const msgs = cutoff ? all.filter((m) => m.createdAt >= cutoff) : all;
     lastId = msgs.length ? msgs[msgs.length - 1].id : '';
-
-    // Delete expired media (at most once every 5 minutes)
-    const expired = msgs.filter((m) => m.url && m.expiresAt && m.expiresAt < now);
-    const hasOld = !!cutoff && all.length > 0 && all[0].createdAt < cutoff;
-    if ((expired.length || hasOld) && (await kvSet('cleanup-lock', 1, { ex: 300, nx: true }))) {
-      if (expired.length) await deleteMedia(expired.map((m) => m.url));
-      if (hasOld) await purgeOldMessages();
-    }
     if (lastId !== since) out = msgs.map((m) => (m.expiresAt && m.expiresAt < now ? { ...m, url: null, expired: true } : m));
   }
 

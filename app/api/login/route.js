@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { userForCode, makeCookieValue, cookieOptions, CODE_RE } from '@/lib/auth';
 import { kvIncr, kvDecr } from '@/lib/store';
 import { checkConfig } from '@/lib/config';
+import { purgeExpiredMessageMedia } from '@/lib/media';
 import { safe, readJson, fail, GENERIC_ERROR } from '@/lib/http';
 
 const MAX_FAILS = 10;
@@ -31,6 +32,7 @@ export const POST = safe(async (req) => {
   const user = userForCode(code);
   if (!user) return NextResponse.json({ error: 'Incorrect code' }, { status: 401 });
   await kvDecr(rlKey);
+  await purgeExpiredMessageMedia().catch(() => {});
 
   const res = NextResponse.json({ ok: true }, { headers: { 'cache-control': 'no-store' } });
   const { name, ...opts } = cookieOptions;

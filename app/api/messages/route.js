@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { authed } from '@/lib/auth';
 import { listPush, kvSet, kvGet, kvDel } from '@/lib/store';
-import { MEDIA_TTL_MS } from '@/lib/media';
+import { MEDIA_TTL_MS, purgeExpiredMessageMedia } from '@/lib/media';
 import { safe, readJson, fail } from '@/lib/http';
 
 const OK_URL = /^(https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/[^\s"'<>\\]{1,400}$|\/api\/media\?id=[a-f0-9]{16}$)/i;
@@ -55,5 +55,7 @@ export const POST = safe(async (req) => {
     if (cid) await kvDel(cid).catch(() => {});
     throw e;
   }
+  const cleanup = () => purgeExpiredMessageMedia().catch(() => {});
+  try { after(cleanup); } catch { await cleanup(); }
   return NextResponse.json({ ok: true, id: msg.id, from: me }, { headers: { 'cache-control': 'no-store' } });
 });

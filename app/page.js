@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import { createVoiceTyping } from '@/lib/voice';
-import { normalizeMessages, quotedAuthor } from '@/lib/messages';
+import { normalizeMessages, quotedAuthor, setOptimisticStatus, optimisticRetryLabel } from '@/lib/messages';
 import SplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
 
@@ -406,6 +406,13 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   useEffect(() => {
     aliveR.current = true;
     let running = false, again = false;
+    let idleWait = 1000;
+    const nextWait = () => {
+      const hidden = document.visibilityState === 'hidden';
+      if (hidden) return 7000;
+      if (callR.current.phase !== 'idle') return 800;
+      return idleWait;
+    };
     async function tick() {
       // Never run two polls at once. A second request just schedules a quick follow-up poll, so
       // "refresh now" calls cannot multiply the polling loop.
@@ -427,25 +434,46 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
         if (seenQ) seenSentR.current = sentId;
         setPeerSeen(typeof d.peerSeen === 'string' ? d.peerSeen : '');
         if (d.messages) {
+          idleWait = 1000;
           if (!firstR.current) activity(); // a new message arrived or was sent
           firstR.current = false;
           lastIdR.current = d.lastId;
-          setMsgs(normalizeMessages(d.messages));
+          const serverMessages = normalizeMessages(d.messages);
+          setMsgs((cur) => {
+            const outstanding = cur.filter((m) => (m.pending || m.status === 'failed')
+              && !serverMessages.some((server) => server.from === m.from && server.type === 'text'
+                && server.text === m.text && Math.abs(server.createdAt - m.createdAt) < 5000));
+            return normalizeMessages([...serverMessages, ...outstanding]);
+          });
         }
         firstR.current = false;
         await handleCall(d.call || null);
       } catch {} finally {
         running = false;
         if (aliveR.current) {
-          const wait = again ? 100 : callR.current.phase === 'idle' ? 2500 : 1000;
+          const wait = again ? 250 : nextWait();
+          if (!again && document.visibilityState !== 'hidden' && callR.current.phase === 'idle') {
+            idleWait = Math.min(3000, idleWait * 2);
+          }
           again = false;
           timerR.current = setTimeout(tick, wait);
         }
       }
     }
-    tickR.current = tick;
+    const trigger = () => {
+      if (!aliveR.current) return;
+      if (running) { again = true; return; }
+      tick();
+    };
+    tickR.current = trigger;
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') trigger();
+    };
+    const onOnline = () => trigger();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('online', onOnline);
     tick();
-    return () => { aliveR.current = false; clearTimeout(timerR.current); };
+    return () => { aliveR.current = false; clearTimeout(timerR.current); document.removeEventListener('visibilitychange', onVisibility); window.removeEventListener('online', onOnline); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -466,26 +494,34 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   }, [msgs.length]);
 
   // ---------- sending ----------
-  async function send(e) {
+  async function send(e, retryMessage = null) {
     if (e && e.preventDefault) e.preventDefault();
-    const t = text.trim();
+    const t = (retryMessage ? retryMessage.text : text).trim();
     if (!t || sendingR.current) return;
     sendingR.current = true;
     voiceR.current.halt({ keepPending: true }); // stop listening; a recording already being transcribed still delivers its text
-    const rt = replyTo;
-    setText(''); setReplyTo(null); activity();
-    // One id per message: if the request reached the server but the reply was lost, the retry cannot create a duplicate
+    const rt = retryMessage ? retryMessage.replyTo : replyTo;
     const pc = pendingR.current;
-    const cid = pc && pc.t === t ? pc.cid : (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2, 10));
+    const cid = retryMessage ? retryMessage.cid : pc && pc.t === t ? pc.cid : (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2, 10));
+    const optimisticId = 'pending:' + cid;
+    const optimistic = retryMessage
+      ? { ...retryMessage, status: 'sending', pending: true }
+      : { id: optimisticId, from: me, type: 'text', text: t, createdAt: Date.now(), status: 'sending', pending: true, cid, reply: rt ? { from: rt.from, who: rt.from === me ? 'You' : names[peer], text: snip(rt) } : undefined };
     pendingR.current = { t, cid };
+    if (!retryMessage) {
+      setText(''); setReplyTo(null); activity();
+      setMsgs((cur) => normalizeMessages([...cur, optimistic]));
+    } else {
+      setMsgs((cur) => setOptimisticStatus(cur, cid, 'sending'));
+    }
     try {
       const r = await postMsg({ type: 'text', cid, text: t, reply: rt ? { from: rt.from, who: rt.from === me ? 'You' : names[peer], text: snip(rt) } : undefined });
       if (!r.ok) throw new Error('send failed');
       pendingR.current = null;
+      setMsgs((cur) => normalizeMessages(cur.map((m) => (m.pending && m.cid === cid ? { ...m, id: r.id, pending: false, status: 'sent' } : m))));
       tickR.current && tickR.current();
     } catch {
-      // Do not lose the user's message: put it back so it can be sent again
-      setText((cur) => (cur ? t + ' ' + cur : t)); setReplyTo(rt);
+      setMsgs((cur) => setOptimisticStatus(cur, cid, 'failed'));
       toast('Message not sent. Please try again.');
     } finally { sendingR.current = false; }
   }
@@ -813,6 +849,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
           <span className={'pill' + (left <= 15 ? ' low' : '')}>Auto logout in {clock}</span>
           {visible.length === 0 && <span className="pill">Today</span>}
           {visible.map((m, i) => {
+            const retryLabel = optimisticRetryLabel(m);
             const showDay = i === 0 || dayKey(visible[i - 1].createdAt) !== dayKey(m.createdAt);
             const row = (() => {
             const mine = m.from === me;
@@ -847,8 +884,9 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
                     onPointerUp={() => clearTimeout(lp.current)} onPointerLeave={() => clearTimeout(lp.current)} onPointerCancel={() => clearTimeout(lp.current)}>
                     {m.reply && <div className="quote"><b>{quotedAuthor(m) === me ? 'You' : names[quotedAuthor(m) || peer]}</b>{m.reply.text}</div>}
                     {body}
-                    <span className="meta">{m.expiresAt && !gone ? `Deletes in ${hoursLeft(m)}h · ` : ''}{hm(m.createdAt)}{mine && <span className={'tk' + (peerSeenTs && m.createdAt <= peerSeenTs ? ' read' : '')}><MIc n={peerSeenTs && m.createdAt <= peerSeenTs ? 'cc' : 'check'} size={15} /></span>}</span>
+                    <span className="meta">{m.expiresAt && !gone ? `Deletes in ${hoursLeft(m)}h · ` : ''}{hm(m.createdAt)}{mine && (m.status === 'failed' ? <span className="send-failed">Not sent</span> : m.status === 'sending' ? <span>Sending…</span> : <span className={'tk' + (peerSeenTs && m.createdAt <= peerSeenTs ? ' read' : '')}><MIc n={peerSeenTs && m.createdAt <= peerSeenTs ? 'cc' : 'check'} size={15} /></span>)}</span>
                   </div>
+                  {retryLabel && <button type="button" className="retry-msg" onClick={(e) => { e.stopPropagation(); send(null, { ...m, replyTo: m.reply }); }}>{retryLabel}</button>}
                   {rx[m.id] && <span className="rx">{rx[m.id]}</span>}
                 </div>
               </div>

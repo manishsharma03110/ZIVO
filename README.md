@@ -15,7 +15,7 @@ Photos, videos and voice messages are deleted after 24 hours. Text and call mess
 
 ## How it works
 - WebSockets are not available on the Vercel free tier, so the chat refreshes by polling every 2.5 seconds (every 1 second during a call).
-- Photos and videos upload directly from the browser to Blob (max 50 MB). They are deleted after 24 hours: when the chat is opened, and by a daily cron job (`vercel.json`), which also removes old text messages.
+- Photos and videos upload directly from the browser to Blob (max 50 MB). Expired media is removed by a request-limited cleanup after successful login (up to five referenced files per six hours) and by the daily cron job (`vercel.json`), which also removes old text messages and sweeps unreferenced Blob files.
 - Calls use WebRTC, browser to browser. The server only passes the offer/answer and a short heartbeat.
 - If a call does not connect on strict networks (office or mobile NAT), add a TURN server (`TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`).
 - Idle logout: only sending or receiving messages, typing, voice typing, or a call resets the timer. The server cookie also expires after 2 minutes.

@@ -4,6 +4,7 @@ Object.assign(process.env, { SESSION_SECRET: 'x'.repeat(40), CODE_A: 'Ab12Cd34Ef
 delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.BLOB_READ_WRITE_TOKEN; delete process.env.VERCEL;
 const R = (p) => import('../app/api/' + p + '/route.js');
 const login = await R('login'), me = await R('me'), poll = await R('poll'), msgs = await R('messages'), call = await R('call'), media = await R('media'), logout = await R('logout');
+const { kvDel, kvGet } = await import('../lib/store.js');
 
 let ipN = 0;
 const mk = (url, { method = 'GET', body, cookie, ip } = {}) => new Request('http://localhost' + url, {
@@ -65,6 +66,21 @@ test('send/receive, both users see the same conversation in order', async () => 
   assert.deepEqual(pa.messages.map((m) => m.text), ['hello from A', 'hello from B']);
   assert.deepEqual(pb.messages.map((m) => m.text), ['hello from A', 'hello from B']);
   assert.deepEqual(pa.messages.map((m) => m.from), ['A', 'B']);
+});
+test('retrying an accepted message with the same cid returns the original id and stores it once', async () => {
+  const cid = 'retry-message-123';
+  const post = () => msgs.POST(mk('/api/messages', { method: 'POST', cookie: A.cookie, body: { type: 'text', text: 'one copy', cid } }));
+  const first = await (await post()).json();
+  const retry = await (await post()).json();
+  assert.equal(retry.duplicate, true);
+  assert.equal(retry.id, first.id);
+  const stored = (await getPoll(A)).messages.filter((m) => m.text === 'one copy');
+  assert.equal(stored.length, 1);
+});
+test('successful message send triggers the bounded expired-media cleanup', async () => {
+  await kvDel('expired-media-cleanup-lock');
+  assert.equal((await send(A, 'cleanup trigger')).status, 200);
+  assert.ok(await kvGet('expired-media-cleanup-lock'));
 });
 test('sender identity comes from the cookie, not the body', async () => {
   const r = await msgs.POST(mk('/api/messages', { method: 'POST', cookie: A.cookie, body: { type: 'text', text: 'spoof', from: 'B', id: 'x' } }));

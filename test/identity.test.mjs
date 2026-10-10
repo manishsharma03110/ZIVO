@@ -4,7 +4,7 @@ Object.assign(process.env, { SESSION_SECRET: 'x'.repeat(40), CODE_A: 'Ab12Cd34Ef
 delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.BLOB_READ_WRITE_TOKEN; delete process.env.VERCEL;
 const R = (p) => import('../app/api/' + p + '/route.js');
 const login = await R('login'), poll = await R('poll'), msgs = await R('messages');
-const { normalizeMessages, quotedAuthor } = await import('../lib/messages.js');
+const { normalizeMessages, quotedAuthor, setOptimisticStatus, optimisticRetryLabel } = await import('../lib/messages.js');
 
 let ipN = 100;
 const mk = (url, { method = 'GET', body, cookie } = {}) => new Request('http://localhost' + url, {
@@ -69,4 +69,19 @@ test('normalizeMessages keeps server order, drops unattributed and duplicate mes
   ]);
   assert.deepEqual(out.map((m) => m.id), ['2-a', '1-a']); // not re-sorted by id/timestamp, not reordered by position
   assert.deepEqual(normalizeMessages(null), []);
+});
+
+test('failed optimistic message stays visible with retry and retains its cid', () => {
+  const cid = 'retry-client-id';
+  const original = { id: 'pending:' + cid, from: 'A', type: 'text', text: 'retry me', cid, pending: true, status: 'sending' };
+  const failed = setOptimisticStatus([original], cid, 'failed');
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].status, 'failed');
+  assert.equal(failed[0].pending, false);
+  assert.equal(optimisticRetryLabel(failed[0]), 'Retry');
+  const retried = setOptimisticStatus(failed, cid, 'sending');
+  assert.equal(retried.length, 1);
+  assert.equal(retried[0].cid, cid);
+  assert.equal(retried[0].pending, true);
+  assert.equal(optimisticRetryLabel(retried[0]), null);
 });
