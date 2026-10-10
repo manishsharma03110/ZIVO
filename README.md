@@ -1,6 +1,6 @@
 # ZIVO Private Chat (Vercel free tier)
 
-Sign in on the homepage (ZIVO login screen) with the secret code typed into the mobile-number field, then chat one-to-one (text, photos, video) and make voice/video calls.
+Sign in on the homepage (ZIVO login screen) with the 10-character access code (`CODE_A` / `CODE_B`) typed into the login field, then chat one-to-one (text, photos, video) and make voice/video calls.
 Photos, videos and voice messages are deleted after 24 hours. Text and call messages are deleted after 7 days (`MESSAGE_TTL_DAYS`). After 1 minute without activity the user is logged out automatically.
 
 ## Deploy (Vercel)
@@ -42,8 +42,12 @@ Photos, videos and voice messages are deleted after 24 hours. Text and call mess
 - Right-click / long-press / double-tap on a message: reactions, Reply, Copy, Delete. Replies are visible to both people; reactions and "Delete for me" exist only in your own browser.
 - Incoming video calls can also be answered with "Swipe up to answer".
 - Messages can be written in any language. Enter sends (it does not send while an input method is composing a word); Shift+Enter adds a new line.
-- Voice typing: tap the mic, speak, and your words appear in the text box. Use the HI/EN button to switch between Hindi and English, then press send.
-  It needs a browser with speech recognition and microphone permission (Chrome, Edge or Safari over HTTPS; some browsers, such as Brave, block it).
+- Voice typing: **press and hold** the mic in the message box, speak, release. The words appear in the box and can be edited before sending. A quick tap also works (tap to start, tap again to stop).
+  With `STT_API_KEY` set (Vercel Environment Variables) the audio goes to `/api/transcribe` (a Vercel route handler; the key never reaches the browser) and Hindi + English can be mixed in one sentence, e.g. "Kal mujhe office jana hai and please remind me at 10 AM". Recordings are limited to 90 seconds and 20 requests per minute.
+  Without a key the app falls back to the browser's speech recognition (Chrome, Edge or Safari over HTTPS): one language at a time, switched in the menu (Voice: English / Hindi).
+- Edit profile (⋮ menu): photo, name and bio. Stored in Redis (the photo is a small 256 px image), shown to the other person within about 30 seconds.
+- Menu (⋮): Edit profile, Voice call, Video call, Share app link, Log out. Long-press / right-click a message for Reply, Copy, Share, Copy image, Delete for me.
+  "Share app link" shares only the website address (the system share sheet where available, otherwise it copies the link). There is deliberately no conversation link: the chat is private and has no shareable-link mechanism. Share / Copy image appear only where the browser supports them.
 - Voice messages: tap the attach button, choose "Voice message", speak, then tap send (or cancel). Maximum 5 minutes.
   Recordings are WebM on Chrome/Edge/Firefox and M4A on Safari; very old Safari versions cannot play WebM.
 - Ticks: one tick means sent; the double tick means the other person has opened the chat and seen the message.

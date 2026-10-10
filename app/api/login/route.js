@@ -19,7 +19,7 @@ export const POST = safe(async (req) => {
   if (parsed.error) return fail(parsed);
   // Anything that is not exactly 10 characters can never be valid, so it is rejected without counting as a guess
   const code = typeof parsed.body.code === 'string' ? parsed.body.code : '';
-  if (!CODE_RE.test(code)) return NextResponse.json({ error: 'Please enter a valid 10-digit mobile number.' }, { status: 400 });
+  if (!CODE_RE.test(code)) return NextResponse.json({ error: 'Please enter your 10-character access code.' }, { status: 400 });
 
   const ip = (req.headers.get('x-forwarded-for') || 'x').split(',')[0].trim().slice(0, 64);
   const rlKey = 'rl:' + ip;

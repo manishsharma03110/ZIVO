@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const LEN = 10; // the field takes exactly 10 characters: letters, numbers or a mix
 
@@ -17,15 +17,28 @@ function GoogleG() {
   );
 }
 
-// Login screen. The field accepts the account's access value; it is masked while typing.
+// Login screen. The field accepts the account's access value; it is masked by default and an eye button reveals it.
 export default function LoginScreen({ onDone }) {
   const [value, setValue] = useState('');
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false); // the value stays masked by default (it is the account's secret code); the eye shows it
   const [shaking, setShaking] = useState(false);
   const inputR = useRef(null);
   const ready = value.length === LEN;
+
+  // Whole value always visible: for the rare value that is wider than the box on a very narrow phone (for example ten
+  // wide letters), the text is shrunk just enough to fit. Normal values keep the regular size, so nothing changes visually.
+  const fit = useCallback(() => {
+    const el = inputR.current;
+    if (!el) return;
+    el.style.fontSize = '';
+    let px = parseFloat(getComputedStyle(el).fontSize) || 16;
+    for (let i = 0; i < 16 && el.scrollWidth > el.clientWidth + 1 && px > 10.5; i++) { px -= 0.5; el.style.fontSize = px + 'px'; }
+  }, []);
+  useLayoutEffect(() => { fit(); }, [value, show, fit]);
+  useEffect(() => { window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit); }, [fit]);
 
   // Gentle feedback on a mistake: the field shakes and the phone vibrates briefly
   function oops(message) {
@@ -38,20 +51,20 @@ export default function LoginScreen({ onDone }) {
     e.preventDefault();
     if (busy) return;
     setInfo('');
-    if (!value) return oops('Please enter your mobile number.');
-    if (!ready) return oops('Please enter a valid 10-digit mobile number.');
+    if (!value) return oops('Please enter your access code.');
+    if (!ready) return oops('Please enter your 10-character access code.');
     setBusy(true); setErr('');
     try {
       const r = await post('/api/login', { code: value });
       const d = await r.json().catch(() => ({}));
-      if (r.status === 401 || r.status === 400) oops(r.status === 400 ? 'Please enter a valid 10-digit mobile number.' : 'Invalid mobile number. Please try again.');
+      if (r.status === 401 || r.status === 400) oops(r.status === 400 ? 'Please enter your 10-character access code.' : 'Invalid access code. Please try again.');
       else if (!r.ok) oops(d.error || 'Login failed. Please try again.');
       else await onDone();
     } catch { oops('Network error. Please check your connection and try again.'); }
     setBusy(false);
   }
 
-  const placeholder = (what) => { setErr(''); setInfo(`${what} is coming soon. Please continue with your mobile number.`); };
+  const placeholder = (what) => { setErr(''); setInfo(`${what} is coming soon. Please continue with your access code.`); };
 
   return (
     <main className="loginpage">
@@ -73,10 +86,19 @@ export default function LoginScreen({ onDone }) {
           </svg>
           <span className="cc">+91</span>
           <svg className="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#5b5870" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          <input ref={inputR} type="password" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
-            maxLength={LEN} placeholder="Enter your mobile number" value={value}
-            aria-label="Enter your mobile number" aria-invalid={!!err}
+          <input ref={inputR} type={show ? 'text' : 'password'} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
+            maxLength={LEN} placeholder="Enter your access code" value={value}
+            aria-label="Enter your access code" aria-invalid={!!err}
             onChange={(e) => { setValue(e.target.value.replace(/\s/g, '').slice(0, LEN)); setErr(''); setInfo(''); }} />
+          {value && (
+            <button type="button" className="eye" aria-label={show ? 'Hide entered value' : 'Show entered value'} aria-pressed={show}
+              onMouseDown={(e) => e.preventDefault()} onClick={() => { setShow((v) => !v); inputR.current && inputR.current.focus(); }}>
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="#5b5870" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {show ? <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>
+                  : <><path d="M17.9 17.9A10.1 10.1 0 0 1 12 19c-6.4 0-10-7-10-7a18 18 0 0 1 4.1-4.9M9.9 5.2A9.7 9.7 0 0 1 12 5c6.4 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22M14.1 14.1a3 3 0 0 1-4.2-4.2" /></>}
+              </svg>
+            </button>
+          )}
         </label>
 
         <div className="msg err" role="alert">{err}</div>

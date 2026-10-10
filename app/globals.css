@@ -61,6 +61,15 @@ em { font-style: normal; color: var(--p1); }
 .chev { flex: none; margin-right: 4px; }
 .field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 16.5px; color: #1d0b52; }
 .field input::placeholder { color: #9b94c0; }
+/* login input fixes only: full placeholder, readable typed value */
+.field { min-width: 0; }
+.field input { height: 100%; padding: 0; line-height: normal; text-overflow: clip; font-weight: 500; opacity: 1; -webkit-text-fill-color: #1d0b52; caret-color: #7a12db; }
+.field input[type="password"] { letter-spacing: .14em; font-size: 18px; }
+.field input::placeholder { font-size: clamp(12px, 3.9vw, 16.5px); font-weight: 400; letter-spacing: 0; opacity: 1; -webkit-text-fill-color: #9b94c0; }
+.field input:-webkit-autofill { -webkit-text-fill-color: #1d0b52; transition: background-color 9999s ease-out; }
+.eye { flex: none; width: 36px; height: 36px; margin-right: -8px; border-radius: 50%; display: grid; place-items: center; background: none; }
+.eye:active { background: #f3effd; }
+.eye:focus-visible { outline: 3px solid #7a12db55; outline-offset: 0; }
 .msg { min-height: 20px; font-size: 14px; line-height: 1.35; text-align: center; }
 .msg.err { color: #e11d48; margin: 6px 0 2px; }
 .msg.info { color: #6a0cc9; margin: 10px 0 0; }
@@ -297,3 +306,60 @@ em { font-style: normal; color: var(--p1); }
 .mchat-wrap .wv.on s{animation:wave .8s ease-in-out infinite alternate}
 
 .mchat-wrap .act.listening{background:linear-gradient(135deg,#ef4444,#f97316);animation:pulse 1.2s infinite}
+
+/* ---------- chat: viewport, keyboard, voice typing, profile ---------- */
+html:has(.mchat-wrap), body:has(.mchat-wrap) { overflow: hidden; overscroll-behavior: none; }
+.mchat .chat, .mchat .feed { min-height: 0; }
+/* Phones/tablets: pin the chat to the visual viewport (set from visualViewport in page.js) so the keyboard never leaves a blank gap */
+@media (max-width: 899px) {
+  .mchat-wrap { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100dvh); }
+  .mchat { height: 100%; }
+}
+.mchat.kb .comp { padding-bottom: 10px; }
+.mchat .hd, .mchat .comp { flex: none; }
+.mchat .avimg { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; -webkit-user-drag: none; }
+.mchat .av { overflow: visible; }
+.mchat .sa { overflow: hidden; }
+.mchat .big { overflow: hidden; }
+.mchat .who { min-width: 0; }
+.mchat .nm, .mchat .st { max-width: 100%; }
+.mchat .nm { overflow: hidden; }
+@media (max-width: 419px) { .mchat .qcall { display: none; } }
+@media (max-width: 359px) { .mchat .hd { gap: 4px; padding-inline: 8px; } .mchat .ib { width: 40px; height: 40px; } .mchat .cr { gap: 6px; } .mchat .cr > .ib { width: 42px; height: 42px; } .mchat .act { width: 44px; height: 44px; } }
+.mchat .menu > button[role="menuitem"] { min-height: 44px; }
+
+/* microphone: idle / starting / recording / processing */
+.mchat .fb.mic { width: 44px; height: 44px; margin: -2px -3px -2px 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; position: relative; color: var(--ic); }
+.mchat .fb.mic.rec { background: #ef4444; color: #fff; }
+.mchat .fb.mic.rec:not(.dim)::before, .mchat .fb.mic.rec:not(.dim)::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(239, 68, 68, .55); animation: ring 1.4s infinite; pointer-events: none; }
+.mchat .fb.mic.rec:not(.dim)::after { animation-delay: .7s; }
+.mchat .fb.mic.rec.dim { opacity: .7; }
+.mchat .fb.mic.proc { background: var(--chip); }
+.mchat .mspin { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgba(124, 77, 255, .3); border-top-color: var(--p1); animation: spin2 .7s linear infinite; }
+@keyframes spin2 { to { transform: rotate(360deg); } }
+.mchat .act.off { opacity: .45; box-shadow: none; }
+.mchat .act:disabled { cursor: default; }
+.mchat .act.off:hover { transform: none; }
+.mchat textarea { -webkit-user-select: text; user-select: text; }
+
+/* edit profile */
+.mchat .psheet { position: absolute; inset: 0; z-index: 35; display: flex; flex-direction: column; background: var(--feed); animation: zoom .22s ease; min-height: 0; }
+.mchat .pbody { flex: 1; min-height: 0; overflow-y: auto; padding: 22px clamp(16px, 5vw, 32px) 12px; display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 520px; margin: 0 auto; overscroll-behavior: contain; }
+.mchat .pav { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.mchat .pimg { width: 112px; height: 112px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, #a070ff, #5330ee); box-shadow: 0 10px 28px rgba(91, 51, 240, .28); }
+.mchat .pimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mchat .pchg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 99px; background: var(--chip); color: var(--ic); font-weight: 600; font-size: 14.5px; }
+.mchat .plnk { color: #e5484d; font-size: 14px; padding: 6px 10px; }
+.mchat .pf { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; color: var(--mut); font-weight: 600; }
+.mchat .pf input, .mchat .pf textarea { width: 100%; border: 1.5px solid var(--line); background: var(--panel); color: var(--tx); border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 16px; font-weight: 400; line-height: 1.4; outline: 0; resize: none; max-height: none; }
+.mchat .pf input:focus, .mchat .pf textarea:focus { border-color: var(--p1); box-shadow: 0 0 0 4px rgba(124, 77, 255, .14); }
+.mchat .pf small { align-self: flex-end; font-weight: 400; }
+.mchat .pfoot { flex: none; display: flex; gap: 10px; padding: 10px clamp(16px, 5vw, 32px) calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); width: 100%; }
+.mchat.kb .pfoot { padding-bottom: 12px; }
+.mchat .pcancel, .mchat .psave { flex: 1; min-height: 48px; border-radius: 14px; font-weight: 700; font-size: 16px; }
+.mchat .pcancel { background: var(--chip); color: var(--ic); }
+.mchat .psave { color: #fff; background: linear-gradient(135deg, #8d5cff, #5230ee); box-shadow: 0 8px 20px rgba(91, 51, 240, .35); }
+.mchat .psave:disabled { opacity: .6; }
+@media (min-width: 900px) { .mchat .hd .qcall { display: grid; } }
+/* stacking inside the chat: profile sheet (35) < toast (38) < call screen (40), so an incoming call is never hidden and profile errors stay visible */
+.mchat .toast { z-index: 38; }

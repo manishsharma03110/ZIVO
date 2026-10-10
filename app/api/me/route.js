@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { authed, names } from '@/lib/auth';
 import { hasBlob } from '@/lib/media';
 import { safe } from '@/lib/http';
+import { sttKey } from '@/lib/stt';
 
 export const GET = safe(async (req) => {
   const ses = await authed(req);
@@ -14,5 +15,5 @@ export const GET = safe(async (req) => {
       credential: process.env.TURN_CREDENTIAL,
     });
   }
-  return NextResponse.json({ user: ses.u, names: names(), blob: hasBlob, ice }, { headers: { 'cache-control': 'no-store' } });
+  return NextResponse.json({ user: ses.u, names: names(), blob: hasBlob, ice, stt: !!sttKey() }, { headers: { 'cache-control': 'no-store' } });
 });

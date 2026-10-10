@@ -43,10 +43,10 @@ export default function Page() {
   if (s.status === 'out') return <LoginScreen onDone={loggedIn} />;
   // The server cookie is the only source of identity. If it no longer matches this tab, reload who we are (Chat remounts via key).
   const resync = () => { loggedIn().catch(() => setS({ status: 'out' })); };
-  return <Chat key={s.user} me={s.user} names={s.names} ice={s.ice} blob={s.blob} onLogout={logout} onResync={resync} />;
+  return <Chat key={s.user} me={s.user} names={s.names} ice={s.ice} blob={s.blob} stt={!!s.stt} onLogout={logout} onResync={resync} />;
 }
 
-const M={pause:'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>',up:'<path d="m18 15-6-6-6 6"/>',micoff:'<path d="m2 2 20 20M18.9 10.9V12a7 7 0 0 1-.7 3M15 9.3V4a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 10v2a7 7 0 0 0 11.5 5.3M12 19v3"/>',camoff:'<path d="M10.7 5H14a2 2 0 0 1 2 2v3.3l5.6 3.4V7.9L16 10.5M2 2l20 20M2 7v10a2 2 0 0 0 2 2h12"/>',speaker:'<path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',arrow:'<path d="M19 12H5M12 19l-7-7 7-7"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',video:'<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',plus:'<path d="M12 5v14M5 12h14"/>',smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',clip:'<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',check:'<path d="M20 6 9 17l-5-5"/>',mic:'<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/>',cc:'<path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/>',badge:'<path d="M3.9 8.6a4 4 0 0 1 4.7-4.7 4 4 0 0 1 6.8 0 4 4 0 0 1 4.8 4.8 4 4 0 0 1 0 6.8 4 4 0 0 1-4.8 4.7 4 4 0 0 1-6.7 0 4 4 0 0 1-4.8-4.7 4 4 0 0 1 0-6.9z" fill="currentColor" stroke="none"/><path d="m9 12 2 2 4-4" stroke="#fff"/>',user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="currentColor"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/>',reply:'<path d="m9 17-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4"/>',copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',play:'<path d="M6 3l14 9-14 9z" fill="currentColor"/>'};
+const M={pause:'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>',up:'<path d="m18 15-6-6-6 6"/>',micoff:'<path d="m2 2 20 20M18.9 10.9V12a7 7 0 0 1-.7 3M15 9.3V4a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 10v2a7 7 0 0 0 11.5 5.3M12 19v3"/>',camoff:'<path d="M10.7 5H14a2 2 0 0 1 2 2v3.3l5.6 3.4V7.9L16 10.5M2 2l20 20M2 7v10a2 2 0 0 0 2 2h12"/>',speaker:'<path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',arrow:'<path d="M19 12H5M12 19l-7-7 7-7"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',video:'<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',plus:'<path d="M12 5v14M5 12h14"/>',smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',clip:'<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',check:'<path d="M20 6 9 17l-5-5"/>',mic:'<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/>',cc:'<path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/>',badge:'<path d="M3.9 8.6a4 4 0 0 1 4.7-4.7 4 4 0 0 1 6.8 0 4 4 0 0 1 4.8 4.8 4 4 0 0 1 0 6.8 4 4 0 0 1-4.8 4.7 4 4 0 0 1-6.7 0 4 4 0 0 1-4.8-4.7 4 4 0 0 1 0-6.9z" fill="currentColor" stroke="none"/><path d="m9 12 2 2 4-4" stroke="#fff"/>',user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="currentColor"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/>',reply:'<path d="m9 17-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4"/>',copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',play:'<path d="M6 3l14 9-14 9z" fill="currentColor"/>',more:'<circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/>',edit:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>'};
 const MIc = ({ n, size = 22 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: M[n] }} />
 );
@@ -85,7 +85,77 @@ function VoicePlayer({ url, dur }) {
   );
 }
 
-function Chat({ me, names, ice, blob, onLogout, onResync }) {
+// Avatar: the person's photo when they have one, otherwise the user icon
+const Av = ({ p, size }) => (p && p.photo ? <img className="avimg" src={p.photo} alt="" draggable="false" /> : <MIc n="user" size={size} />);
+
+// Crops the chosen picture to a centred square and shrinks it to 256 px so it stays small (about 15-40 KB)
+async function toAvatar(file) {
+  const bmp = await createImageBitmap(file);
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const w = bmp.width, h = bmp.height, m = Math.min(w, h);
+  c.getContext('2d').drawImage(bmp, (w - m) / 2, (h - m) / 2, m, m, 0, 0, S, S);
+  for (let q = 0.85; q >= 0.35; q -= 0.15) { const u = c.toDataURL('image/jpeg', q); if (u.length <= 85000) return u; }
+  throw new Error('too large');
+}
+
+function ProfileSheet({ me, p, defName, onClose, onSaved, onActivity, toast }) {
+  const [name, setName] = useState((p && p.name) || defName);
+  const [bio, setBio] = useState((p && p.bio) || '');
+  const [photo, setPhoto] = useState(undefined); // undefined = unchanged, null = removed, string = new picture
+  const [saving, setSaving] = useState(false);
+  const fileR = useRef(null);
+  const shown = photo === null ? '' : photo || (p ? p.photo : '');
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [onClose]);
+  async function pick(e) {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return toast('Please choose an image.');
+    try { setPhoto(await toAvatar(f)); onActivity(); } catch { toast('That picture could not be used.'); }
+  }
+  async function save() {
+    if (saving) return;
+    setSaving(true); onActivity();
+    try {
+      const r = await post('/api/profile', { as: me, name, bio, ...(photo !== undefined ? { photo } : {}) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Could not save your profile.');
+      onSaved(d.profiles); toast('Profile saved'); onClose();
+    } catch (e) { toast((e && e.message) || 'Could not save your profile.'); setSaving(false); }
+  }
+  return (
+    <section className="psheet" role="dialog" aria-label="Edit profile" onInput={onActivity}>
+      <header className="hd">
+        <button type="button" className="ib flat" aria-label="Back" onClick={onClose}><MIc n="arrow" /></button>
+        <div className="who"><b style={{ fontSize: 18 }}>Edit profile</b></div>
+      </header>
+      <div className="pbody">
+        <div className="pav">
+          <div className="pimg">{shown ? <img src={shown} alt="Profile picture preview" /> : <MIc n="user" size={56} />}</div>
+          <button type="button" className="pchg" onClick={() => fileR.current.click()}><MIc n="camera" size={16} />Change photo</button>
+          {shown && <button type="button" className="plnk" onClick={() => setPhoto(null)}>Remove photo</button>}
+          <input ref={fileR} type="file" accept="image/*" hidden onChange={pick} />
+        </div>
+        <label className="pf"><span>Name</span>
+          <input value={name} maxLength={30} placeholder={defName} autoComplete="off" enterKeyHint="next" onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="pf"><span>Bio / About</span>
+          <textarea rows={3} maxLength={120} placeholder="Say something about yourself" value={bio} onChange={(e) => setBio(e.target.value)} />
+          <small>{Array.from(bio).length}/120</small>
+        </label>
+      </div>
+      <footer className="pfoot">
+        <button type="button" className="pcancel" onClick={onClose}>Cancel</button>
+        <button type="button" className="psave" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+      </footer>
+    </section>
+  );
+}
+
+function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const connT = useRef(0);
   const callTok = useRef(0);
   const ackR = useRef('');
@@ -113,6 +183,23 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
   const [link, setLink] = useState('');
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
+  // Profiles (name, bio, photo) edited by the two people. The environment names are only the defaults.
+  const [profiles, setProfiles] = useState(null);
+  const names = { A: (profiles && profiles.A.name) || namesBase.A, B: (profiles && profiles.B.name) || namesBase.B };
+  const loadProfiles = useCallback(async () => {
+    try { const r = await fetch('/api/profile', { cache: 'no-store' }); if (r.ok) setProfiles((await r.json()).profiles); } catch {}
+  }, []);
+  useEffect(() => {
+    loadProfiles();
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') loadProfiles(); }, 30000);
+    return () => clearInterval(iv);
+  }, [loadProfiles]);
+  const [prof, setProf] = useState(false);
+  const [kb, setKb] = useState(false);
+  const nearBottomR = useRef(true);
+  const formR = useRef(null);
+  const sttR = useRef(!!stt);
+  sttR.current = !!stt;
 
   const callR = useRef({ phase: 'idle' });
   const busyR = useRef(false);
@@ -208,7 +295,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
 
   async function startCall(video) {
     if (callR.current.phase !== 'idle') return;
-    stopVoiceNote(false);
+    stopVoiceNote(false); voiceR.current.halt();
     activity();
     const tok = ++callTok.current;
     const stale = () => callTok.current !== tok || callR.current.phase !== 'calling';
@@ -238,7 +325,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
   async function accept() {
     const cur = callR.current;
     if (cur.phase !== 'incoming') return;
-    stopVoiceNote(false);
+    stopVoiceNote(false); voiceR.current.halt();
     connT.current = Date.now();
     setCall({ ...cur, phase: 'connected' });
     try {
@@ -384,7 +471,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
     const t = text.trim();
     if (!t || sendingR.current) return;
     sendingR.current = true;
-    voiceR.current.halt(); // stop dictation so late speech results cannot refill the box
+    voiceR.current.halt({ keepPending: true }); // stop listening; a recording already being transcribed still delivers its text
     const rt = replyTo;
     setText(''); setReplyTo(null); activity();
     // One id per message: if the request reached the server but the reply was lost, the retry cannot create a duplicate
@@ -509,8 +596,9 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
   const [ui, setUi] = useState(true);
   const taR = useRef(null), fiR = useRef(null), fcR = useRef(null), lp = useRef(0), swy = useRef(null), uiT = useRef(0);
   const toast = (t) => { setToast(t); setTimeout(() => setToast(''), 1800); };
-  const [rec, setRec] = useState(false);
-  const [lang, setLang] = useState('hi-IN');
+  const [vstate, setVstate] = useState('idle'); // idle | starting | recording | processing
+  const [vtap, setVtap] = useState(false);      // true while a tap-to-record session is running
+  const [lang, setLang] = useState('en-IN');
   const textR = useRef('');
   textR.current = text;
   const voiceR = useRef(null);
@@ -518,21 +606,91 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
     voiceR.current = createVoiceTyping({
       getText: () => textR.current,
       setText: (v) => setText(v),
-      onState: (v) => setRec(v),
-      onBusy: (v) => { micR.current = v; },
+      onState: (v, tap) => { setVstate(v); setVtap(!!tap); micR.current = v !== 'idle'; },
       onToast: (m) => toast(m),
       onActivity: () => activity(),
-      canStart: () => (callR.current.phase !== 'idle' ? 'Voice typing is not available during a call.' : null),
+      canStart: () => (callR.current.phase !== 'idle' ? 'Voice typing is not available during a call.' : vnR.current.rec ? 'Finish the voice message first.' : null),
+      engine: () => (sttR.current ? 'cloud' : 'browser'),
+      transcribe: async (blob) => {
+        const fd = new FormData(); fd.append('audio', blob, 'speech');
+        const r = await fetch('/api/transcribe', { method: 'POST', body: fd });
+        if (r.status === 401) { logout(); throw new Error('Your session has ended.'); }
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'Voice typing failed. Please try again.');
+        return d.text || '';
+      },
     });
   }
-  const startRec = () => voiceR.current.start();
-  const stopRec = () => voiceR.current.stop();
-  const swapLang = () => setLang(voiceR.current.swap());
+  // Press-and-hold microphone. Window-level listeners guarantee the release is always seen, even if the finger slides off
+  // the button or the layout changes while it is held.
+  const micOffR = useRef(null);
+  const micDown = (e) => {
+    if (e.button > 0 || e.isPrimary === false) return;
+    const v = voiceR.current;
+    if (micOffR.current) micOffR.current(); // listeners of an earlier press whose release never arrived
+    const up = () => { off(); v.release(); }, cancel = () => { off(); v.cancelPress(); };
+    const off = () => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); if (micOffR.current === off) micOffR.current = null; };
+    micOffR.current = off;
+    window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
+    v.press();
+  };
+  const micKey = (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); voiceR.current.toggle(); } };
+  const swapLang = () => { const l = voiceR.current.swap(); setLang(l); toast(l === 'hi-IN' ? 'Voice language: Hindi' : 'Voice language: English (India)'); };
   useEffect(() => {
     const v = voiceR.current;
     const h = (e) => { if (e.key === 'Escape') v.stop(); };
+    const hide = () => { if (document.visibilityState !== 'visible') v.cancelPress(); };
     document.addEventListener('keydown', h);
-    return () => { document.removeEventListener('keydown', h); v.halt(); };
+    document.addEventListener('visibilitychange', hide);
+    window.addEventListener('blur', hide);
+    // The mic must not steal focus (that would close the keyboard in the middle of a recording) and must not scroll the page
+    const f = formR.current;
+    const block = (e) => { if (e.target.closest && e.target.closest('[data-mic]')) e.preventDefault(); };
+    if (f) { f.addEventListener('touchstart', block, { passive: false }); f.addEventListener('mousedown', block); }
+    return () => {
+      document.removeEventListener('keydown', h); document.removeEventListener('visibilitychange', hide); window.removeEventListener('blur', hide);
+      if (f) { f.removeEventListener('touchstart', block); f.removeEventListener('mousedown', block); }
+      v.halt();
+    };
+  }, []);
+
+  // ---------- mobile keyboard / dynamic viewport ----------
+  // The chat is pinned to the *visual* viewport: when the keyboard opens it shrinks to the space above the keyboard
+  // (input stays visible); when it closes it returns to the full height at once. interactive-widget=resizes-content
+  // (layout.js) covers Android Chrome; visualViewport covers iOS Safari, which resizes only the visual viewport.
+  useEffect(() => {
+    const vv = window.visualViewport, root = document.documentElement;
+    let maxH = Math.max(window.innerHeight, vv ? vv.height : 0), raf = 0;
+    const apply = () => {
+      raf = 0;
+      const h = vv ? vv.height : window.innerHeight, top = vv ? vv.offsetTop : 0;
+      if (h > maxH) maxH = h;
+      const field = document.activeElement && document.activeElement.matches && document.activeElement.matches('textarea,input');
+      const open = !!field && h < maxH - 120;
+      root.style.setProperty('--vvh', Math.round(h) + 'px');
+      root.style.setProperty('--vvt', Math.round(top) + 'px');
+      setKb((k) => (k === open ? k : open));
+      if (!open && (window.scrollX || window.scrollY)) window.scrollTo(0, 0); // iOS can leave the page scrolled after the keyboard closes
+      const l = listR.current;
+      if (l && nearBottomR.current) l.scrollTo({ top: l.scrollHeight, behavior: 'instant' }); // keep the latest messages in view
+    };
+    const sched = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const late = () => { sched(); setTimeout(sched, 120); setTimeout(sched, 350); }; // some browsers report the final size late
+    const rotate = () => { maxH = 0; late(); };
+    apply();
+    if (vv) { vv.addEventListener('resize', sched); vv.addEventListener('scroll', sched); }
+    window.addEventListener('resize', sched);
+    window.addEventListener('orientationchange', rotate);
+    window.addEventListener('pageshow', late);
+    document.addEventListener('focusin', late);
+    document.addEventListener('focusout', late);
+    return () => {
+      if (vv) { vv.removeEventListener('resize', sched); vv.removeEventListener('scroll', sched); }
+      window.removeEventListener('resize', sched); window.removeEventListener('orientationchange', rotate); window.removeEventListener('pageshow', late);
+      document.removeEventListener('focusin', late); document.removeEventListener('focusout', late);
+      if (raf) cancelAnimationFrame(raf);
+      root.style.removeProperty('--vvh'); root.style.removeProperty('--vvt');
+    };
   }, []);
   const vconn = !!call.video && call.phase === 'connected' && link === 'connected';
   useEffect(() => {
@@ -541,14 +699,53 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
     const t = setTimeout(() => setUi(false), 3500);
     return () => clearTimeout(t);
   }, [vconn]);
+  // An incoming or outgoing call takes over the screen: close any open menu or popup so nothing stays above the call controls
+  useEffect(() => { if (call.phase !== 'idle') { setMenu(null); setPop(''); } }, [call.phase]);
   useEffect(() => { const t = taR.current; if (!t) return; t.style.height = 'auto'; if (text) t.style.height = Math.min(t.scrollHeight, 120) + 'px'; else t.style.height = ''; }, [text]);
 
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share;
+  const canCopyImg = typeof ClipboardItem !== 'undefined' && !!(typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.write);
   const openMenu = (kind, m, el) => {
-    const r = el.getBoundingClientRect(), w = 220, h = kind === 'msg' ? 230 : 210;
-    let y = r.top - h - 8; if (y < 8) y = Math.min(r.bottom + 8, innerHeight - h - 8);
+    const r = el.getBoundingClientRect(), w = 220;
+    const n = 2 + (m && m.type === 'text' ? (canShare ? 2 : 1) : m && m.type === 'image' ? (canShare ? 1 : 0) + (canCopyImg ? 1 : 0) : 0);
+    const h = kind === 'msg' ? 62 + 44 * n : 210;
+    const vh = window.visualViewport ? window.visualViewport.height : innerHeight;
+    let y = r.top - h - 8; if (y < 8) y = Math.max(8, Math.min(r.bottom + 8, vh - h - 8));
     setPop('');
     setMenu({ kind, m, y, x: Math.max(8, Math.min(r.left + (r.width - w) / 2, innerWidth - w - 8)) });
   };
+  const openAcct = (el) => {
+    const r = el.getBoundingClientRect(), w = 232;
+    setPop('');
+    setMenu({ kind: 'acct', y: r.bottom + 6, x: Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) });
+  };
+  const copyText = (t) => { try { navigator.clipboard.writeText(t).then(() => toast('Copied'), () => toast('Could not copy')); } catch { toast('Could not copy'); } };
+  async function imageBlob(url) { const r = await fetch(url); if (!r.ok) throw new Error('fetch'); return r.blob(); }
+  async function copyImage(url) {
+    try {
+      const b = await imageBlob(url);
+      const bmp = await createImageBitmap(b); // the clipboard only accepts PNG
+      const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0);
+      const png = await new Promise((res) => c.toBlob(res, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      toast('Image copied');
+    } catch { toast('Could not copy this image'); }
+  }
+  async function shareMsg(m) {
+    try {
+      if (m.type === 'text') { await navigator.share({ text: m.text }); return; }
+      let b = null;
+      try { b = await imageBlob(m.url); } catch {}
+      const file = b && new File([b], 'zivo-photo.' + ((b.type || 'image/jpeg').split('/')[1] || 'jpg').replace('jpeg', 'jpg'), { type: b.type || 'image/jpeg' });
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file] });
+      else await navigator.share({ url: m.url });
+    } catch (e) { if (!e || e.name !== 'AbortError') toast('Could not share'); }
+  }
+  async function shareApp() {
+    const url = location.origin;
+    try { if (navigator.share) await navigator.share({ title: 'ZIVO', url }); else { await navigator.clipboard.writeText(url); toast('Link copied'); } }
+    catch (e) { if (!e || e.name !== 'AbortError') toast('Could not share'); }
+  }
   const heart = (m) => setRx((r) => ({ ...r, [m.id]: r[m.id] ? null : '❤️' }));
   const visible = msgs.filter((m) => !hid.includes(m.id));
   const peerSeenTs = peerSeen ? Number(peerSeen.split('-')[0]) || 0 : 0; // messages up to this time were seen by the other person
@@ -567,7 +764,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
         <video ref={remoteV} className="remote" autoPlay playsInline style={{ display: vconn ? 'block' : 'none' }} />
         {v && on && <div className={'pip live' + (camOff ? ' off' : '')}><video ref={localV} autoPlay playsInline muted /></div>}
         <div className="ctop">
-          <div className="big"><MIc n="user" size={vconn ? 40 : 56} /></div>
+          <div className="big"><Av p={profiles && profiles[peer]} size={vconn ? 40 : 56} /></div>
           <h2>{names[peer]}</h2>
           <p aria-live="polite">{status}</p>
           {!v && !inc && <div className="wf" aria-hidden="true">{WAVE}</div>}
@@ -589,12 +786,12 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
   };
 
   return (
-    <div className="mchat-wrap"><div className={'mchat' + (list ? ' show-list' : '')}
+    <div className="mchat-wrap"><div className={'mchat' + (list ? ' show-list' : '') + (kb ? ' kb' : '')}
       onPointerDown={(e) => { if (!e.target.closest('.menu,.pop,[data-pop]')) { setMenu(null); setPop(''); } }}>
       <aside className="side" aria-label="Conversations">
         <div className="sh"><h1 className="brand">Morning</h1></div>
         <button className="ci" onClick={() => { setList(false); taR.current && taR.current.focus(); }}>
-          <div className="av"><MIc n="user" /></div>
+          <div className="av"><Av p={profiles && profiles[peer]} size={22} /></div>
           <div className="mid"><b>{names[peer]}</b><small>{last ? snip(last) : 'No messages yet'}</small></div>
           <time>{last ? hm(last.createdAt) : ''}</time>
         </button>
@@ -604,14 +801,14 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
         <header className="hd">
           <button className="ib flat back" aria-label="Back to chats" onClick={() => setList(true)}><MIc n="arrow" /></button>
           <div className="who">
-            <div className="av"><MIc n="user" size={24} /></div>
-            <div style={{ minWidth: 0 }}><div className="nm">{names[peer]} <MIc n="badge" size={18} /></div><div className="st">Private &amp; secure</div></div>
+            <div className="av"><Av p={profiles && profiles[peer]} size={24} /></div>
+            <div style={{ minWidth: 0 }}><div className="nm">{names[peer]} <MIc n="badge" size={18} /></div><div className="st">{(profiles && profiles[peer].bio) || 'Private & secure'}</div></div>
           </div>
-          <button className="ib" aria-label="Voice call" onClick={() => startCall(false)}><MIc n="phone" size={20} /></button>
-          <button className="ib" aria-label="Video call" onClick={() => startCall(true)}><MIc n="video" size={20} /></button>
-          <button className="ib flat" aria-label="Log out" title="Log out" onClick={() => logout()}><MIc n="logout" size={20} /></button>
+          <button className="ib qcall" aria-label="Voice call" onClick={() => startCall(false)}><MIc n="phone" size={20} /></button>
+          <button className="ib qcall" aria-label="Video call" onClick={() => startCall(true)}><MIc n="video" size={20} /></button>
+          <button className="ib flat" data-pop="acct" aria-label="Menu" aria-haspopup="menu" aria-expanded={!!menu && menu.kind === 'acct'} onClick={(e) => (menu && menu.kind === 'acct' ? setMenu(null) : openAcct(e.currentTarget))}><MIc n="more" size={22} /></button>
         </header>
-        <div className="feed" ref={listR} role="log" aria-live="polite">
+        <div className="feed" ref={listR} role="log" aria-live="polite" onScroll={(e) => { const l = e.currentTarget; nearBottomR.current = l.scrollHeight - l.scrollTop - l.clientHeight < 120; }}>
           <span className="pill"><MIc n="lock" size={14} />Private chat</span>
           <span className={'pill' + (left <= 15 ? ' low' : '')}>Auto logout in {clock}</span>
           {visible.length === 0 && <span className="pill">Today</span>}
@@ -640,7 +837,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
               : <video src={m.url} controls playsInline preload="metadata" style={{ maxWidth: '100%', borderRadius: 14, display: 'block' }} />;
             return (
               <div key={m.id} className={'row ' + (mine ? 'out' : 'in')}>
-                {!mine && <div className="sa"><MIc n="user" size={16} /></div>}
+                {!mine && <div className="sa"><Av p={profiles && profiles[peer]} size={16} /></div>}
                 <div className="col">
                   <div className={'bub' + (m.type === 'image' || m.type === 'video' ? ' media' : '')} tabIndex={0} role="button" aria-label={`${mine ? 'You' : names[peer]}: ${snip(m)}. Press Enter for options`}
                     onContextMenu={(e) => { e.preventDefault(); openMenu('msg', m, e.currentTarget); }}
@@ -663,7 +860,7 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
         <div className={'toast' + (toastT ? ' on' : '')} role="status">{toastT}</div>
         <footer className="comp">
           {replyTo && <div className="rb"><MIc n="reply" size={18} /><div><b>{replyTo.from === me ? 'You' : names[peer]}</b><span>{snip(replyTo)}</span></div><button type="button" className="fb" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><MIc n="x" size={18} /></button></div>}
-          {rec && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Listening…</b><span>{lang === 'hi-IN' ? 'Hindi' : 'English'} · speak and your words will appear as text</span></div><button type="button" className="fb" aria-label="Switch language" onClick={swapLang}>{lang === 'hi-IN' ? 'HI' : 'EN'}</button></div>}
+          {vstate !== 'idle' && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>{vstate === 'processing' ? 'Converting speech to text…' : vstate === 'starting' ? 'Starting microphone…' : 'Listening…'}</b><span>{vstate === 'processing' ? 'Your text will appear in the message box' : sttR.current ? 'Speak English, Hindi or Hinglish' + (vtap ? ' · tap the mic to stop' : ' · release to stop') : (lang === 'hi-IN' ? 'Hindi' : 'English (India)') + (vtap ? ' · tap the mic to stop' : ' · release to stop')}</span></div></div>}
           {vn !== null && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Recording voice message…</b><span>{mmss(vn)}</span></div><button type="button" className="fb" aria-label="Cancel recording" onClick={() => stopVoiceNote(false)}><MIc n="x" size={18} /></button><button type="button" className="fb" aria-label="Send voice message" onClick={() => stopVoiceNote(true)}><MIc n="send" size={18} /></button></div>}
           {busy && <div className="rb"><span>{busy}</span></div>}
           <div className={'pop att' + (pop === 'pa' ? ' on' : '')}>
@@ -674,35 +871,47 @@ function Chat({ me, names, ice, blob, onLogout, onResync }) {
           <div className={'pop emo' + (pop === 'pe' ? ' on' : '')} style={{ left: 12 }}>
             {EMOJI.map((e) => <button key={e} type="button" aria-label={'Insert ' + e} onClick={() => { setText((t) => t + e); taR.current && taR.current.focus(); }}>{e}</button>)}
           </div>
-          <form className="cr" onSubmit={send}>
+          <form className="cr" onSubmit={send} ref={formR}>
             <button type="button" className="ib" data-pop="pa" aria-label="Attach" aria-expanded={pop === 'pa'} onClick={() => { setMenu(null); setPop((p) => (p === 'pa' ? '' : 'pa')); }}><MIc n="plus" /></button>
             <div className="fld">
               <button type="button" className="fb" data-pop="pe" aria-label="Emoji" onClick={() => { setMenu(null); setPop((p) => (p === 'pe' ? '' : 'pe')); }}><MIc n="smile" /></button>
               <textarea ref={taR} rows={1} placeholder="Type a message..." aria-label="Message" maxLength={2000} value={text} dir="auto"
-                onChange={(e) => { setText(e.target.value); voiceR.current.rebase(); activity(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+                onChange={(e) => { setText(e.target.value); voiceR.current.rebase(e.target.value); activity(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
                 // Enter sends, but not while an input method (Hindi/Indic, Chinese, Japanese, Korean...) is still composing a word
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); send(e); } }} />
-              <button type="button" className="fb clip" aria-label="Attach photo or video" onClick={() => fiR.current.click()}><MIc n="clip" size={20} /></button>
-              <button type="button" className="fb" aria-label="Open camera" onClick={() => fcR.current.click()}><MIc n="camera" size={20} /></button>
+              <button type="button" data-mic="" className={'fb mic' + (vstate === 'recording' ? ' rec' : vstate === 'starting' ? ' rec dim' : vstate === 'processing' ? ' proc' : '')}
+                aria-label={vstate === 'idle' ? 'Hold to speak' : 'Stop voice typing'} aria-pressed={vstate === 'recording'} title="Hold to speak"
+                onPointerDown={micDown} onKeyDown={micKey} onContextMenu={(e) => e.preventDefault()} onClick={(e) => e.preventDefault()}>
+                {vstate === 'processing' ? <span className="mspin" aria-hidden="true" /> : <MIc n="mic" size={22} />}
+              </button>
             </div>
-            {rec
-              ? <button className="act listening" type="button" aria-label="Stop voice typing" onClick={stopRec}><MIc n="mic" /></button>
-              : text.trim()
-                ? <button className="act" type="submit" aria-label="Send message"><MIc n="send" /></button>
-                : <button className="act" type="button" aria-label="Start voice typing" onClick={startRec}><MIc n="mic" /></button>}
+            <button className={'act' + (text.trim() ? '' : ' off')} type="submit" aria-label="Send message" disabled={!text.trim()}><MIc n="send" /></button>
           </form>
           <input ref={fiR} type="file" accept="image/*,video/*" hidden onChange={onFile} />
           <input ref={fcR} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFile} />
         </footer>
         {call.phase !== 'idle' && renderCall()}
+        {prof && <ProfileSheet me={me} p={profiles && profiles[me]} defName={namesBase[me]} onClose={() => setProf(false)} onSaved={setProfiles} onActivity={activity} toast={toast} />}
       </main>
       {menu && (
         <div className="menu" style={{ top: menu.y, left: menu.x }}>
-          {menu.kind === 'msg' ? (
+          {menu.kind === 'acct' ? (
+            <>
+              <button role="menuitem" onClick={() => { setMenu(null); activity(); setProf(true); }}><MIc n="edit" size={18} />Edit profile</button>
+              <button role="menuitem" onClick={() => { setMenu(null); startCall(false); }}><MIc n="phone" size={18} />Voice call</button>
+              <button role="menuitem" onClick={() => { setMenu(null); startCall(true); }}><MIc n="video" size={18} />Video call</button>
+              <button role="menuitem" onClick={() => { setMenu(null); shareApp(); }}><MIc n="share" size={18} />Share app link</button>
+              {!stt && <button role="menuitem" onClick={() => { setMenu(null); swapLang(); }}><MIc n="globe" size={18} />Voice: {lang === 'hi-IN' ? 'Hindi' : 'English (India)'}</button>}
+              <button role="menuitem" className="dng" onClick={() => { setMenu(null); logout(); }}><MIc n="logout" size={18} />Log out</button>
+            </>
+          ) : menu.kind === 'msg' ? (
             <>
               <div className="qr">{REACT.map((e) => <button key={e} className={rx[menu.m.id] === e ? 'sel' : ''} aria-label={'React ' + e} onClick={() => { setRx((r) => ({ ...r, [menu.m.id]: r[menu.m.id] === e ? null : e })); setMenu(null); }}>{e}</button>)}</div>
               <button onClick={() => { setReplyTo(menu.m); setMenu(null); taR.current && taR.current.focus(); }}><MIc n="reply" size={18} />Reply</button>
-              {menu.m.type === 'text' && <button onClick={() => { try { navigator.clipboard.writeText(menu.m.text).then(() => toast('Copied'), () => toast('Could not copy')); } catch { toast('Could not copy'); } setMenu(null); }}><MIc n="copy" size={18} />Copy</button>}
+              {menu.m.type === 'text' && <button onClick={() => { copyText(menu.m.text); setMenu(null); }}><MIc n="copy" size={18} />Copy</button>}
+              {menu.m.type === 'text' && canShare && <button onClick={() => { const m = menu.m; setMenu(null); shareMsg(m); }}><MIc n="share" size={18} />Share</button>}
+              {menu.m.type === 'image' && menu.m.url && canCopyImg && <button onClick={() => { const u = menu.m.url; setMenu(null); copyImage(u); }}><MIc n="copy" size={18} />Copy image</button>}
+              {menu.m.type === 'image' && menu.m.url && canShare && <button onClick={() => { const m = menu.m; setMenu(null); shareMsg(m); }}><MIc n="share" size={18} />Share image</button>}
               <button className="dng" onClick={() => { setHid((h) => [...h, menu.m.id]); setMenu(null); }}><MIc n="trash" size={18} />Delete for me</button>
             </>
           ) : (
