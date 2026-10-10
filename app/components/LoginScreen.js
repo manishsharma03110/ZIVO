@@ -87,7 +87,7 @@ export default function LoginScreen({ onDone }) {
           <span className="cc">+91</span>
           <svg className="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#5b5870" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
           <input ref={inputR} type={show ? 'text' : 'password'} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
-            maxLength={LEN} placeholder="Enter your access code" value={value}
+            maxLength={LEN} placeholder="Enter Your Mobile Number" value={value}
             aria-label="Enter your access code" aria-invalid={!!err}
             onChange={(e) => { setValue(e.target.value.replace(/\s/g, '').slice(0, LEN)); setErr(''); setInfo(''); }} />
           {value && (
