@@ -79,7 +79,50 @@ export const POST = safe(async (req) => {
         return NextResponse.json({ error: 'no call' }, { status: 404 });
       }
       // The offer is no longer needed once answered; dropping it keeps every poll response small
-      await kvSet('call', { ...call, offer: null, answer, status: 'active', answeredAt: now }, { ex: 6 * 3600 });
+      await kvSet('call', { ...call, video: call.video && b.video !== false, offer: null, answer, status: 'active', answeredAt: now }, { ex: 6 * 3600 });
+      return NextResponse.json({ ok: true });
+    });
+  }
+
+  if (b.action === 'restart-offer' || b.action === 'restart-answer') {
+    const restartId = typeof b.restartId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(b.restartId) ? b.restartId : '';
+    const type = b.action === 'restart-offer' ? 'offer' : 'answer';
+    const description = cleanSdp(b.description, type);
+    if (!restartId || !description) return NextResponse.json({ error: 'bad restart description' }, { status: 400 });
+    return withLock(async () => {
+      const call = await kvGet('call');
+      if (!call || call.id !== b.id || call.status !== 'active' || (call.from !== me && call.to !== me)) {
+        return NextResponse.json({ error: 'no active call' }, { status: 404 });
+      }
+      if (type === 'offer') {
+        await kvSet('call', {
+          ...call,
+          restartOffer: { id: restartId, from: me, to: other(me), description },
+          restartAnswer: null,
+        }, { ex: 6 * 3600 });
+      } else {
+        const offer = call.restartOffer;
+        if (!offer || offer.id !== restartId || offer.to !== me || offer.from === me) {
+          return NextResponse.json({ error: 'no matching restart offer' }, { status: 409 });
+        }
+        await kvSet('call', {
+          ...call,
+          restartAnswer: { id: restartId, from: me, to: offer.from, description },
+        }, { ex: 6 * 3600 });
+      }
+      return NextResponse.json({ ok: true });
+    });
+  }
+
+  if (b.action === 'restart-request') {
+    const restartId = typeof b.restartId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(b.restartId) ? b.restartId : '';
+    if (!restartId) return NextResponse.json({ error: 'bad restart request' }, { status: 400 });
+    return withLock(async () => {
+      const call = await kvGet('call');
+      if (!call || call.id !== b.id || call.status !== 'active' || call.to !== me) {
+        return NextResponse.json({ error: 'no active call' }, { status: 404 });
+      }
+      await kvSet('call', { ...call, restartRequest: { id: restartId, from: me, to: call.from } }, { ex: 6 * 3600 });
       return NextResponse.json({ ok: true });
     });
   }

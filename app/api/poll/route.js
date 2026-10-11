@@ -42,6 +42,9 @@ export const GET = safe(async (req) => {
       // Heavy SDP blobs are sent only while needed: the offer while ringing, the answer until the caller acknowledges it
       offer: call.to === me && call.status === 'ringing' ? call.offer : undefined,
       answer: call.from === me && ack !== call.id ? call.answer : undefined,
+      restartOffer: call.status === 'active' && call.restartOffer && call.restartOffer.to === me ? call.restartOffer : undefined,
+      restartAnswer: call.status === 'active' && call.restartAnswer && call.restartAnswer.to === me ? call.restartAnswer : undefined,
+      restartRequest: call.status === 'active' && call.restartRequest && call.restartRequest.to === me ? call.restartRequest : undefined,
     };
   }
 

@@ -135,13 +135,21 @@ test('read receipt only accepts a well-formed id and cannot be set for the other
 });
 test('call signaling: third party / outsider cannot answer; ids required to end', async () => {
   const sdp = (type) => ({ type, sdp: 'v=0\r\n' + 'a'.repeat(50) });
-  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: A.cookie, body: { action: 'start', offer: sdp('offer'), video: false } }))).status, 200);
+  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: A.cookie, body: { action: 'start', offer: sdp('offer'), video: true } }))).status, 200);
   assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: A.cookie, body: { action: 'start', offer: sdp('offer') } }))).status, 409);
   assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: A.cookie, body: { action: 'answer', id: 'x', answer: sdp('answer') } }))).status, 404);
   const pb = await getPoll(B); assert.equal(pb.call.status, 'ringing'); assert.ok(pb.call.offer);
   assert.equal((await getPoll(A)).call.offer, undefined); // caller never receives its own offer back
   assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'answer', id: pb.call.id, answer: { type: 'answer', sdp: 'x' } } }))).status, 400);
-  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'answer', id: pb.call.id, answer: sdp('answer') } }))).status, 200);
+  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'answer', id: pb.call.id, answer: sdp('answer'), video: false } }))).status, 200);
+  assert.equal((await getPoll(A)).call.video, false);
+  const restartId = 'restart-1234';
+  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'restart-request', id: pb.call.id, restartId: 'request-1234' } }))).status, 200);
+  assert.equal((await getPoll(A)).call.restartRequest.id, 'request-1234');
+  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: A.cookie, body: { action: 'restart-offer', id: pb.call.id, restartId, description: sdp('offer') } }))).status, 200);
+  assert.equal((await getPoll(B)).call.restartOffer.id, restartId);
+  assert.equal((await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'restart-answer', id: pb.call.id, restartId, description: sdp('answer') } }))).status, 200);
+  assert.equal((await getPoll(A)).call.restartAnswer.id, restartId);
   await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'end' } })); // no id -> ignored
   assert.equal((await getPoll(A)).call.status, 'active');
   await call.POST(mk('/api/call', { method: 'POST', cookie: B.cookie, body: { action: 'end', id: pb.call.id } }));

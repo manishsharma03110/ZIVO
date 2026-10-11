@@ -49,6 +49,18 @@ test('cloud: hold, release -> transcript appended, mic released, state returns t
   assert.ok(h.tracks.every((t) => t.stopped), 'microphone tracks are stopped');
 });
 
+test('cloud: startWithStream uses the permission-approved stream without requesting the mic again', async () => {
+  let requests = 0, stopped = false;
+  const stream = { getTracks: () => [{ stop() { stopped = true; } }] };
+  const h = harness({ engine: 'cloud', gum: async () => { requests++; return { getTracks: () => [] }; } });
+  h.v.startWithStream(stream);
+  assert.equal(h.v.state, 'recording');
+  assert.equal(requests, 0);
+  h.advance(HOLD_MS + 400); h.v.press();
+  await sleep(30);
+  assert.equal(stopped, true);
+});
+
 test('cloud: repeated recordings work back to back and append', async () => {
   const h = harness({ engine: 'cloud', transcribeImpl: () => 'hello' });
   for (let i = 0; i < 4; i++) {
@@ -127,6 +139,17 @@ test('browser: builds text from interim + final results without duplicating word
   assert.equal(h.text, 'Hi kal mujhe office jana hai');
   h.advance(HOLD_MS + 300); h.v.release(); await sleep(20);
   assert.equal(h.v.state, 'idle');
+});
+
+test('browser: repeated final result at the same index is not appended twice', () => {
+  const h = harness({ engine: 'browser' });
+  h.v.press();
+  const r = h.instances[0];
+  const final = Object.assign([{ transcript: 'same words' }], { isFinal: true });
+  r.onresult({ resultIndex: 0, results: [final] });
+  r.onresult({ resultIndex: 0, results: [final] });
+  assert.equal(h.text, 'same words');
+  h.v.halt();
 });
 
 test('browser: an engine that never fires onend is force-closed and the next recording still starts', async () => {

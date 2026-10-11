@@ -251,6 +251,26 @@ em { font-style: normal; color: var(--p1); }
 .mchat .cb.red{background:#ef4444}
 .mchat .cb.red svg{transform:rotate(135deg)}
 .mchat .cb.grn{background:#22c55e}
+.mchat .call-notice{max-width:34rem;color:#ffe2a8;line-height:1.4}
+.mchat .mic-live{color:#baf3ce;font-weight:700}
+.mchat .ice-debug{font-size:11px;opacity:.75}
+.mchat .playback-enable{align-self:center;min-height:48px;padding:0 16px;border-radius:24px;background:#fff;color:#241b52;font-weight:700;z-index:3}
+.mchat .permission-backdrop{position:absolute;inset:0;z-index:100;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));background:rgba(12,8,34,.7)}
+.mchat .permission-dialog{width:min(420px,100%);max-height:calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px;border-radius:18px;background:var(--panel);color:var(--tx);box-shadow:0 22px 64px rgba(0,0,0,.38)}
+.mchat .permission-dialog h2{margin:0 0 10px;font-size:21px}
+.mchat .permission-dialog p{margin:8px 0;line-height:1.5}
+.mchat .permission-steps{font-size:13px;color:var(--mut)}
+.mchat .permission-actions{display:flex;gap:10px;margin-top:18px}
+.mchat .permission-actions button{min-height:48px;padding:0 16px;border-radius:12px;font-weight:700}
+.mchat .permission-allow{flex:1;background:var(--ic)!important;color:#fff!important}
+.mchat .permission-cancel{background:var(--chip)!important}
+@media (max-height:520px) and (orientation:landscape){
+  .mchat .call .ctop{padding:8px;gap:4px}
+  .mchat .call .big{width:62px;height:62px;margin:0}
+  .mchat .call .big:before,.mchat .call .big:after{animation-duration:3s}
+  .mchat .call .wf{height:24px;margin-top:0}
+  .mchat .call .ctl{padding:6px 10px calc(8px + env(safe-area-inset-bottom))}
+}
 .mchat .inc .cb{width:68px;height:68px}
 .mchat .pip{position:absolute;right:16px;top:calc(16px + env(safe-area-inset-top));width:clamp(92px,26%,140px);aspect-ratio:3/4;border-radius:18px;background:linear-gradient(135deg,#a889ff,#5b33f0);display:grid;place-items:center;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.4);border:2px solid rgba(255,255,255,.35);z-index:2;animation:rise .3s}
 .mchat .pip video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;transition:opacity .3s}
@@ -302,7 +322,8 @@ em { font-style: normal; color: var(--p1); }
 }
 .mchat .pill.low{color:#e5484d}
 .mchat .remote{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-.mchat .call>*:not(.remote){position:relative;z-index:1}
+.mchat .remote-audio{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.mchat .call>*:not(.remote):not(.remote-audio){position:relative;z-index:1}
 .mchat .call>.pip{position:absolute}
 
 .mchat-wrap .wv.on s{animation:wave .8s ease-in-out infinite alternate}

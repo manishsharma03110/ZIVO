@@ -4,6 +4,8 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import { createVoiceTyping } from '@/lib/voice';
 import { normalizeMessages, quotedAuthor, setOptimisticStatus, optimisticRetryLabel } from '@/lib/messages';
+import { inAppBrowserMessage, permissionInstructions, queryMediaPermission, requestMediaStream } from '@/lib/media-permissions';
+import { CALL_SETUP_TIMEOUT_MS, ICE_DISCONNECTED_GRACE_MS, ICE_RESTART_TIMEOUT_MS, getSelectedCandidateType, isCallSetupPhase, isFastPollingPhase, setupTimeoutDelay, shouldRestartIce } from '@/lib/call-state';
 import SplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
 
@@ -160,6 +162,12 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const callTok = useRef(0);
   const ackR = useRef('');
   const discT = useRef(null);
+  const restartT = useRef(null);
+  const callSetupT = useRef(null);
+  const iceRestartedR = useRef(false);
+  const restartOfferSeenR = useRef('');
+  const restartAnswerSeenR = useRef('');
+  const permissionTokenR = useRef(0);
   const micR = useRef(false);
   const sendingR = useRef(false);
   const pendingR = useRef(null); // { t, cid } of a send that failed, so a retry of the same text is not stored twice
@@ -181,6 +189,12 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const [now, setNow] = useState(Date.now());
   const [call, setCallState] = useState({ phase: 'idle' });
   const [link, setLink] = useState('');
+  const [permissionPrompt, setPermissionPrompt] = useState(null);
+  const [permissionInfo, setPermissionInfo] = useState({ permission: 'unknown' });
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [playbackNeedsGesture, setPlaybackNeedsGesture] = useState(false);
+  const [iceDebug, setIceDebug] = useState('');
+  const [voiceSupported, setVoiceSupported] = useState(!!stt);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   // Profiles (name, bio, photo) edited by the two people. The environment names are only the defaults.
@@ -215,6 +229,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const listR = useRef(null);
   const localV = useRef(null);
   const remoteV = useRef(null);
+  const remoteA = useRef(null);
   const aliveR = useRef(true);
 
   const setCall = (c) => { callR.current = c; setCallState(c); };
@@ -227,11 +242,17 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       postMsg({ type: 'call', video: !!c.video, status: c.phase === 'connected' ? 'done' : (st || 'cancelled'), dur }).catch(() => {});
     }
     connT.current = 0;
-    clearTimeout(discT.current); ackR.current = '';
+    clearTimeout(discT.current); clearTimeout(restartT.current); clearTimeout(callSetupT.current); ackR.current = '';
     try { pcR.current && pcR.current.close(); } catch {}
     pcR.current = null;
     if (localS.current) localS.current.getTracks().forEach((t) => t.stop());
+    if (remoteS.current) remoteS.current.getTracks().forEach((t) => { try { t.stop(); } catch {} });
+    if (localV.current) localV.current.srcObject = null;
+    if (remoteV.current) remoteV.current.srcObject = null;
+    if (remoteA.current) remoteA.current.srcObject = null;
     localS.current = null; remoteS.current = null; answeredR.current = false;
+    iceRestartedR.current = false; restartOfferSeenR.current = ''; restartAnswerSeenR.current = '';
+    setPlaybackNeedsGesture(false); setIceDebug('');
     setLink(''); setMuted(false); setCamOff(false);
     setCall({ phase: 'idle' });
   }, []);
@@ -249,25 +270,160 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     onLogout();
   }, [hangup, onLogout]);
 
+  function openPermissionPrompt(request) {
+    const token = ++permissionTokenR.current;
+    setPermissionPrompt({ ...request, token });
+    setPermissionBusy(false);
+    const embeddedMessage = inAppBrowserMessage(navigator.userAgent || '');
+    if (embeddedMessage) {
+      setPermissionInfo({ permission: 'unknown', message: embeddedMessage, instructions: 'Browser ke menu se Open in Chrome/Safari chuno.' });
+      return;
+    }
+    setPermissionInfo({ permission: 'checking' });
+    queryMediaPermission(navigator, request.video ? 'video' : 'audio').then((permission) => {
+      if (permissionTokenR.current === token) setPermissionInfo({ permission });
+    });
+  }
+
+  async function allowMedia() {
+    const request = permissionPrompt;
+    if (!request || permissionBusy) return;
+    setPermissionBusy(true);
+    const result = await requestMediaStream({ video: request.video });
+    setPermissionBusy(false);
+    if (permissionTokenR.current !== request.token) {
+      if (result.stream) result.stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+    if (!result.ok) {
+      setPermissionInfo({ permission: result.permission || 'unknown', message: result.message, instructions: result.instructions });
+      return;
+    }
+    if (request.kind === 'voice' && !sttR.current) {
+      result.stream.getTracks().forEach((track) => track.stop());
+      setPermissionInfo({ permission: result.permission, ready: true });
+      return;
+    }
+    setPermissionPrompt(null);
+    if (result.message) toast(result.message);
+    if (request.kind === 'voice') {
+      const session = voiceR.current && voiceR.current.startWithStream(result.stream);
+      if (!session) toast('Voice typing start nahi hui. Dobara try karo.');
+    } else if (request.kind === 'voice-note') {
+      await startVoiceNote(result.stream);
+    } else if (request.kind === 'accept') {
+      await accept(result.stream, result.downgraded);
+    } else {
+      await startCall(request.video, result.stream, result.downgraded);
+    }
+  }
+
+  function startVoiceAfterPermission() {
+    if (!permissionPrompt || !permissionInfo.ready) return;
+    setPermissionPrompt(null);
+    voiceR.current.toggle();
+  }
+
+  async function failCall(message) {
+    const current = callR.current;
+    if (!isCallSetupPhase(current.phase) && current.phase !== 'connected') return;
+    const video = current.video;
+    callTok.current++;
+    await hangup('missed');
+    setCall({ phase: 'failed', video, error: message });
+  }
+
   // ---------- WebRTC ----------
   function makePC(stream) {
     const pc = new RTCPeerConnection({ iceServers: ice });
     stream.getTracks().forEach((t) => pc.addTrack(t, stream));
     pc.ontrack = (e) => {
-      remoteS.current = e.streams[0];
-      if (remoteV.current) remoteV.current.srcObject = e.streams[0];
+      const incoming = e.streams && e.streams[0] || new MediaStream([e.track]);
+      remoteS.current = incoming;
+      const media = callR.current.video ? remoteV.current : remoteA.current;
+      if (media) {
+        media.srcObject = incoming;
+        retryRemotePlayback();
+      }
+    };
+    pc.onicecandidateerror = (e) => {
+      if (process.env.NODE_ENV !== 'production') console.debug('[call] ICE candidate error', e.errorCode, e.errorText);
+    };
+    pc.onsignalingstatechange = () => {
+      if (process.env.NODE_ENV !== 'production') console.debug('[call] signaling state', pc.signalingState);
+    };
+    pc.oniceconnectionstatechange = () => {
+      if (pcR.current !== pc) return;
+      if (process.env.NODE_ENV !== 'production') console.debug('[call] ICE state', pc.iceConnectionState);
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        clearTimeout(discT.current); clearTimeout(restartT.current);
+      } else if (pc.iceConnectionState === 'disconnected') {
+        scheduleIceRecovery(pc);
+      } else if (pc.iceConnectionState === 'failed') {
+        startIceRestart(pc);
+      }
     };
     pc.onconnectionstatechange = () => {
       if (pcR.current !== pc) return;
       const st = pc.connectionState;
       setLink(st);
-      clearTimeout(discT.current);
-      if (st === 'failed') hangup();
-      // A brief "disconnected" is normal on mobile networks; end the call only if it does not recover
-      else if (st === 'disconnected') discT.current = setTimeout(() => { if (pcR.current === pc && pc.connectionState !== 'connected') hangup(); }, 12000);
+      if (st === 'connected') {
+        clearTimeout(discT.current); clearTimeout(restartT.current); iceRestartedR.current = false;
+        connT.current = Date.now();
+        if (callR.current.phase !== 'connected') setCall({ ...callR.current, phase: 'connected' });
+        getSelectedCandidateType(pc).then((type) => {
+          const detail = type ? `ICE ${pc.iceConnectionState} · ${type}` : `ICE ${pc.iceConnectionState}`;
+          setIceDebug(detail);
+          if (process.env.NODE_ENV !== 'production') console.debug('[call] selected candidate', type || 'unknown');
+        });
+      } else if (st === 'failed') {
+        startIceRestart(pc);
+      } else if (st === 'disconnected') {
+        scheduleIceRecovery(pc);
+      }
     };
     pcR.current = pc;
     return pc;
+  }
+
+  function scheduleIceRecovery(pc) {
+    if (discT.current || iceRestartedR.current) return;
+    discT.current = setTimeout(() => {
+      discT.current = null;
+      if (pcR.current === pc && (pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected')) startIceRestart(pc);
+    }, ICE_DISCONNECTED_GRACE_MS);
+  }
+
+  async function startIceRestart(pc) {
+    if (pcR.current !== pc || iceRestartedR.current) return;
+    if (!pc.restartIce) return failCall('Is browser mein ICE restart supported nahi. Call ko Retry karo.');
+    const states = [pc.connectionState, pc.iceConnectionState];
+    const restartState = states.includes('disconnected') ? 'disconnected' : states.includes('failed') ? 'failed' : '';
+    if (!restartState || !shouldRestartIce(restartState === 'failed' ? 'disconnected' : restartState, iceRestartedR.current)) return;
+    iceRestartedR.current = true;
+    const callId = callR.current.id;
+    if (!callId) return failCall('Network disconnect ho gaya. Call ko Retry karo.');
+    const restartId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2, 10);
+    try {
+      if (callR.current.dir === 'in') {
+        const response = await post('/api/call', { action: 'restart-request', id: callId, restartId });
+        if (!response.ok) throw new Error('restart request rejected');
+        restartT.current = setTimeout(() => {
+          if (pcR.current === pc && pc.connectionState !== 'connected') failCall('Network wapas nahi aaya. Call ko Retry karo.');
+        }, ICE_RESTART_TIMEOUT_MS);
+        return;
+      }
+      pc.restartIce();
+      await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+      await waitIce(pc);
+      const response = await post('/api/call', { action: 'restart-offer', id: callId, restartId, description: pc.localDescription });
+      if (!response.ok) throw new Error('restart offer rejected');
+      restartT.current = setTimeout(() => {
+        if (pcR.current === pc && pc.connectionState !== 'connected') failCall('Network wapas nahi aaya. Call ko Retry karo.');
+      }, ICE_RESTART_TIMEOUT_MS);
+    } catch {
+      failCall('Network reconnect nahi hua. Call ko Retry karo.');
+    }
   }
 
   function waitIce(pc) {
@@ -280,63 +436,100 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     });
   }
 
-  async function getMedia(video) {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: video ? { facingMode: 'user' } : false,
-    });
-    localS.current = stream;
-    return stream;
-  }
-
-  const mediaErr = (e) =>
-    e && e.name === 'NotAllowedError' ? 'Please allow microphone and camera access in your browser settings.'
-      : e && e.name === 'NotFoundError' ? 'No microphone or camera was found.' : 'The call could not be started.';
-
-  async function startCall(video) {
-    if (callR.current.phase !== 'idle') return;
+  async function startCall(video, grantedStream, downgraded = false) {
+    if (!grantedStream) { openPermissionPrompt({ kind: 'call', video }); return; }
+    if (callR.current.phase !== 'idle') { grantedStream.getTracks().forEach((track) => track.stop()); return; }
+    const useVideo = video && !downgraded;
     stopVoiceNote(false); voiceR.current.halt();
     activity();
     const tok = ++callTok.current;
     const stale = () => callTok.current !== tok || callR.current.phase !== 'calling';
-    setCall({ phase: 'calling', video, dir: 'out' });
+    const hasTurn = ice.some((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url || '')));
+    const notice = hasTurn ? '' : 'TURN relay configured nahi hai; restricted network par call connect na ho sakegi.';
+    if (!hasTurn && process.env.NODE_ENV !== 'production') console.warn('[call] TURN is not configured; restrictive networks may block peer connection.');
+    setCall({ phase: 'calling', video: useVideo, dir: 'out', notice, startedAt: Date.now() });
+    tickR.current && tickR.current();
     try {
-      const stream = await getMedia(video);
-      // Cancelled while the permission prompt was open: release the mic/camera right away
-      if (stale()) { stream.getTracks().forEach((t) => t.stop()); if (callTok.current === tok) teardown(); return; }
-      const pc = makePC(stream);
+      localS.current = grantedStream;
+      const pc = makePC(grantedStream);
       await pc.setLocalDescription(await pc.createOffer());
       await waitIce(pc);
       if (stale()) { if (callTok.current === tok) teardown(); return; }
-      const r = await post('/api/call', { action: 'start', video, offer: pc.localDescription });
-      if (!r.ok) { if (!stale()) { teardown(); alert(r.status === 409 ? 'A call is already in progress.' : 'The call could not be started.'); } return; }
+      const r = await post('/api/call', { action: 'start', video: useVideo, offer: pc.localDescription });
+      if (!r.ok) {
+        if (!stale()) {
+          teardown();
+          setCall({ phase: 'failed', video: useVideo, error: r.status === 409 ? 'Doosri call pehle se chal rahi hai.' : 'Call start nahi ho payi. Dobara try karo.' });
+        }
+        return;
+      }
       const { id } = await r.json();
       // Cancelled while the request was in flight: end the call that was just created so it does not keep ringing
       if (stale()) { post('/api/call', { action: 'end', id }).catch(() => {}); return; }
       setCall({ ...callR.current, id, idAt: Date.now() });
+      tickR.current && tickR.current();
     } catch (e) {
       if (callTok.current !== tok) return; // a newer call has taken over
-      const wasCalling = callR.current.phase === 'calling';
       teardown();
-      if (wasCalling) alert(mediaErr(e));
+      setCall({ phase: 'failed', video: useVideo, error: 'Call start nahi ho payi. Network aur permissions check karke Retry karo.' });
     }
   }
 
-  async function accept() {
+  async function accept(grantedStream, downgraded = false) {
     const cur = callR.current;
-    if (cur.phase !== 'incoming') return;
+    if (!grantedStream) { if (cur.phase === 'incoming') openPermissionPrompt({ kind: 'accept', video: cur.video, id: cur.id }); return; }
+    if (cur.phase !== 'incoming' || cur.id !== callR.current.id) { grantedStream.getTracks().forEach((track) => track.stop()); return; }
+    const useVideo = cur.video && !downgraded;
     stopVoiceNote(false); voiceR.current.halt();
-    connT.current = Date.now();
-    setCall({ ...cur, phase: 'connected' });
+    connT.current = 0;
+    const hasTurn = ice.some((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url || '')));
+    const notice = hasTurn ? '' : 'TURN relay configured nahi hai; restricted network par call connect na ho sakegi.';
+    if (!hasTurn && process.env.NODE_ENV !== 'production') console.warn('[call] TURN is not configured; restrictive networks may block peer connection.');
+    setCall({ ...cur, video: useVideo, phase: 'connecting', notice, startedAt: Date.now() });
+    tickR.current && tickR.current();
     try {
-      const stream = await getMedia(cur.video);
-      const pc = makePC(stream);
+      localS.current = grantedStream;
+      const pc = makePC(grantedStream);
       await pc.setRemoteDescription(cur.offer);
       await pc.setLocalDescription(await pc.createAnswer());
       await waitIce(pc);
-      const r = await post('/api/call', { action: 'answer', id: cur.id, answer: pc.localDescription });
-      if (!r.ok) { teardown(); alert('This call has already ended.'); }
-    } catch (e) { await hangup(); alert(mediaErr(e)); }
+      const r = await post('/api/call', { action: 'answer', id: cur.id, video: useVideo, answer: pc.localDescription });
+      if (!r.ok) throw new Error('call ended');
+      if (callR.current.phase !== 'connected') setCall({ ...callR.current, phase: 'connecting' });
+      tickR.current && tickR.current();
+    } catch {
+      await hangup('declined');
+      setCall({ phase: 'failed', video: useVideo, error: 'Call answer nahi ho paya. Dobara call karke try karo.' });
+    }
+  }
+
+  async function applyRestartSignaling(c) {
+    const pc = pcR.current;
+    if (!pc || c.status !== 'active') return;
+    const request = c.restartRequest;
+    if (callR.current.dir === 'out' && request && request.id !== restartOfferSeenR.current && request.to === me) {
+      restartOfferSeenR.current = request.id;
+      startIceRestart(pc);
+    }
+    const offer = c.restartOffer;
+    if (offer && offer.id !== restartOfferSeenR.current && offer.to === me) {
+      restartOfferSeenR.current = offer.id;
+      try {
+        await pc.setRemoteDescription(offer.description);
+        await pc.setLocalDescription(await pc.createAnswer());
+        await waitIce(pc);
+        const response = await post('/api/call', { action: 'restart-answer', id: c.id, restartId: offer.id, description: pc.localDescription });
+        if (!response.ok) throw new Error('restart answer rejected');
+      } catch { failCall('Network reconnect nahi hua. Call ko Retry karo.'); }
+    }
+    const answer = c.restartAnswer;
+    if (answer && answer.id !== restartAnswerSeenR.current && answer.to === me) {
+      restartAnswerSeenR.current = answer.id;
+      try {
+        await pc.setRemoteDescription(answer.description);
+        clearTimeout(restartT.current);
+      } catch { failCall('Network reconnect nahi hua. Call ko Retry karo.'); }
+    }
   }
 
   async function handleCall(c) {
@@ -351,20 +544,28 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     if (c.status === 'ringing') {
       if (c.to === me && cur.phase === 'idle' && c.age < 60000) {
         setCall({ phase: 'incoming', dir: 'in', id: c.id, idAt: Date.now(), video: c.video, offer: c.offer });
+        tickR.current && tickR.current();
       } else if (c.to === me && cur.phase === 'incoming' && c.age >= 60000) {
         teardown();
       } else if (c.from === me && cur.phase === 'calling' && c.age >= 60000) {
         hangup('missed'); alert('No answer.');
       }
-    } else if (c.status === 'active' && c.from === me && cur.phase === 'calling' && c.answer && !answeredR.current) {
+    }
+    if (c.status === 'active' && !c.video && cur.video) {
+      if (localS.current) localS.current.getVideoTracks().forEach((track) => track.stop());
+      if (pcR.current) pcR.current.getSenders().filter((sender) => sender.track && sender.track.kind === 'video')
+        .forEach((sender) => { sender.replaceTrack(null).catch(() => {}); });
+      setCamOff(true);
+    }
+    if (c.status === 'active' && c.from === me && cur.phase === 'calling' && c.answer && !answeredR.current) {
       answeredR.current = true;
       ackR.current = c.id; // tell the server we have the answer so it stops sending it
       try {
         await pcR.current.setRemoteDescription(c.answer);
-        connT.current = Date.now();
-        setCall({ ...callR.current, phase: 'connected' });
-      } catch { hangup(); }
+        if (callR.current.phase !== 'connected') setCall({ ...callR.current, video: c.video, phase: 'connecting' });
+      } catch { failCall('Call answer process nahi ho paya. Dobara try karo.'); }
     }
+    if (c.status === 'active') await applyRestartSignaling(c);
   }
 
   // While connected, send a heartbeat so a call abandoned without a clean hang-up never blocks new calls
@@ -375,6 +576,26 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const iv = setInterval(ping, 10000);
     return () => clearInterval(iv);
   }, [call.phase, call.id]);
+
+  useEffect(() => {
+    if (!isCallSetupPhase(call.phase)) return;
+    const phase = call.phase, id = call.id;
+    callSetupT.current = setTimeout(() => {
+      const current = callR.current;
+      if (current.phase !== phase || current.id !== id) return;
+      failCall(phase === 'calling'
+        ? 'Call 30 seconds mein start nahi hui. Network/TURN check karke Retry karo.'
+        : 'Call 30 seconds mein connect nahi hui. Network/TURN check karke Retry karo.');
+    }, setupTimeoutDelay(call.startedAt || Date.now()));
+    return () => clearTimeout(callSetupT.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.phase, call.id]);
+
+  useEffect(() => {
+    const browserSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const cloudSpeech = !!stt && !!window.MediaRecorder && !!navigator.mediaDevices?.getUserMedia;
+    setVoiceSupported(browserSpeech || cloudSpeech);
+  }, [stt]);
 
   // Closing the tab or navigating away mid-call ends the call for the other person too
   useEffect(() => {
@@ -390,8 +611,9 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   // Attach streams to the video elements when the call screen opens
   useEffect(() => {
     if (localV.current && localS.current) localV.current.srcObject = localS.current;
-    if (remoteV.current && remoteS.current) remoteV.current.srcObject = remoteS.current;
-  }, [call.phase]);
+    const remote = call.video ? remoteV.current : remoteA.current;
+    if (remote && remoteS.current) { remote.srcObject = remoteS.current; retryRemotePlayback(); }
+  }, [call.phase, call.video]);
 
   function toggleMic() {
     const t = localS.current && localS.current.getAudioTracks()[0];
@@ -400,6 +622,12 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   function toggleCam() {
     const t = localS.current && localS.current.getVideoTracks()[0];
     if (t) { t.enabled = !t.enabled; setCamOff(!t.enabled); }
+  }
+  function retryRemotePlayback() {
+    const media = callR.current.video ? remoteV.current : remoteA.current;
+    if (!media) return;
+    try { Promise.resolve(media.play()).then(() => setPlaybackNeedsGesture(false)).catch(() => setPlaybackNeedsGesture(true)); }
+    catch { setPlaybackNeedsGesture(true); }
   }
 
   // ---------- polling (auto refresh) ----------
@@ -410,7 +638,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const nextWait = () => {
       const hidden = document.visibilityState === 'hidden';
       if (hidden) return 7000;
-      if (callR.current.phase !== 'idle') return 800;
+      if (isFastPollingPhase(callR.current.phase)) return 800;
       return idleWait;
     };
     async function tick() {
@@ -538,16 +766,18 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   }
 
   // ---------- voice messages (record and send) ----------
-  async function startVoiceNote() {
+  async function startVoiceNote(grantedStream) {
     setPop('');
     const st = vnR.current;
-    if (st.rec) return;
-    if (callR.current.phase !== 'idle') return toast('Voice messages are not available during a call.');
+    if (st.rec) { grantedStream && grantedStream.getTracks().forEach((track) => track.stop()); return; }
+    if (callR.current.phase !== 'idle') {
+      grantedStream && grantedStream.getTracks().forEach((track) => track.stop());
+      return toast('Voice messages are not available during a call.');
+    }
     voiceR.current.halt();
     if (!navigator.mediaDevices || !window.MediaRecorder) return toast('Voice messages are not supported in this browser.');
-    let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch (e) { return toast(e && e.name === 'NotAllowedError' ? 'Please allow microphone access in your browser settings.' : 'No microphone was found.'); }
+    if (!grantedStream) { openPermissionPrompt({ kind: 'voice-note', video: false }); return; }
+    const stream = grantedStream;
     if (st.rec) { stream.getTracks().forEach((t) => t.stop()); return; }
     const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
     const mime = types.find((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
@@ -621,7 +851,11 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const hoursLeft = (m) => Math.max(1, Math.ceil((m.expiresAt - now) / 3600000));
   const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const [spk, setSpk] = useState(true);
-  const toggleSpk = () => { const v = remoteV.current; if (v) { v.muted = spk; } setSpk(!spk); };
+  const toggleSpk = () => {
+    const media = callR.current.video ? remoteV.current : remoteA.current;
+    if (media) { media.muted = spk; if (spk) retryRemotePlayback(); }
+    setSpk(!spk);
+  };
   const [rx, setRx] = useState({});
   const [hid, setHid] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
@@ -663,6 +897,8 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const micDown = (e) => {
     if (e.button > 0 || e.isPrimary === false) return;
     const v = voiceR.current;
+    if (callR.current.phase !== 'idle') { toast('Call ke dauran voice typing band hai.'); return; }
+    if (!v.active) { openPermissionPrompt({ kind: 'voice', video: false }); return; }
     if (micOffR.current) micOffR.current(); // listeners of an earlier press whose release never arrived
     const up = () => { off(); v.release(); }, cancel = () => { off(); v.cancelPress(); };
     const off = () => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); if (micOffR.current === off) micOffR.current = null; };
@@ -670,7 +906,14 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel);
     v.press();
   };
-  const micKey = (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); voiceR.current.toggle(); } };
+  const micKey = (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
+      e.preventDefault();
+      if (callR.current.phase !== 'idle') return toast('Call ke dauran voice typing band hai.');
+      if (!voiceR.current.active) openPermissionPrompt({ kind: 'voice', video: false });
+      else voiceR.current.toggle();
+    }
+  };
   const swapLang = () => { const l = voiceR.current.swap(); setLang(l); toast(l === 'hi-IN' ? 'Voice language: Hindi' : 'Voice language: English (India)'); };
   useEffect(() => {
     const v = voiceR.current;
@@ -789,24 +1032,31 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
 
   const renderCall = () => {
     const v = !!call.video, inc = call.phase === 'incoming', on = call.phase === 'connected', live = on && link === 'connected';
+    const failed = call.phase === 'failed';
     const secs = connT.current ? Math.max(0, Math.floor((now - connT.current) / 1000)) : 0;
-    const status = inc ? `Incoming ${v ? 'video' : 'voice'} call…` : live ? mmss(secs) : on ? 'Connecting…' : v ? 'Video calling…' : 'Calling…';
+    const status = failed ? call.error : inc ? `Incoming ${v ? 'video' : 'voice'} call…` : live ? mmss(secs) : on || call.phase === 'connecting' ? 'Connecting…' : v ? 'Video calling…' : 'Calling…';
     const B = (cls, icon, label, fn) => (
       <div className="cw"><button type="button" className={'cb ' + cls} aria-label={label} aria-pressed={cls === 'on' ? true : undefined} onClick={fn}><MIc n={icon} size={24} /></button><span>{label}</span></div>
     );
     return (
       <section className={'call' + (v ? ' vid' : '') + (vconn ? ' conn' : '') + (inc ? ' in' : '') + (vconn && !ui ? ' idle' : '')} aria-label="Call"
         onClick={() => { setUi(true); clearTimeout(uiT.current); uiT.current = setTimeout(() => setUi(false), 3500); }}>
-        <video ref={remoteV} className="remote" autoPlay playsInline style={{ display: vconn ? 'block' : 'none' }} />
+        {v ? <video ref={remoteV} className="remote" autoPlay playsInline onLoadedMetadata={retryRemotePlayback} style={{ display: vconn ? 'block' : 'none' }} />
+          : <audio ref={remoteA} autoPlay playsInline onLoadedMetadata={retryRemotePlayback} />}
         {v && on && <div className={'pip live' + (camOff ? ' off' : '')}><video ref={localV} autoPlay playsInline muted /></div>}
         <div className="ctop">
           <div className="big"><Av p={profiles && profiles[peer]} size={vconn ? 40 : 56} /></div>
           <h2>{names[peer]}</h2>
           <p aria-live="polite">{status}</p>
+          {call.notice && !failed && <small className="call-notice">{call.notice}</small>}
+          {localS.current && !inc && !failed && <small className="mic-live">Mic chal raha hai</small>}
+          {process.env.NODE_ENV !== 'production' && iceDebug && <small className="ice-debug">{iceDebug}</small>}
           {!v && !inc && <div className="wf" aria-hidden="true">{WAVE}</div>}
         </div>
+        {playbackNeedsGesture && <button type="button" className="playback-enable" onClick={retryRemotePlayback}>Tap to enable audio</button>}
         <div className={'ctl' + (inc ? ' inc' : '')}>
-          {inc ? (<>{B('red', 'phone', 'Decline', () => hangup())}{B('grn', v ? 'video' : 'phone', 'Accept', accept)}</>) : (
+          {failed ? <>{B('grn', 'phone', 'Retry', () => { const video = call.video; setCall({ phase: 'idle' }); openPermissionPrompt({ kind: 'call', video }); })}{B('red', 'x', 'Close', () => setCall({ phase: 'idle' }))}</>
+            : inc ? (<>{B('red', 'phone', 'Decline', () => hangup())}{B('grn', v ? 'video' : 'phone', 'Accept', accept)}</>) : (
             <>{B(muted ? 'on' : '', muted ? 'micoff' : 'mic', 'Mute', toggleMic)}
               {v && B(camOff ? 'on' : '', camOff ? 'camoff' : 'video', 'Camera', toggleCam)}
               {B(!spk ? 'on' : '', 'speaker', 'Speaker', toggleSpk)}
@@ -917,11 +1167,11 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
                 onChange={(e) => { setText(e.target.value); voiceR.current.rebase(e.target.value); activity(); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
                 // Enter sends, but not while an input method (Hindi/Indic, Chinese, Japanese, Korean...) is still composing a word
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); send(e); } }} />
-              <button type="button" data-mic="" className={'fb mic' + (vstate === 'recording' ? ' rec' : vstate === 'starting' ? ' rec dim' : vstate === 'processing' ? ' proc' : '')}
+              {voiceSupported && <button type="button" data-mic="" className={'fb mic' + (vstate === 'recording' ? ' rec' : vstate === 'starting' ? ' rec dim' : vstate === 'processing' ? ' proc' : '')}
                 aria-label={vstate === 'idle' ? 'Hold to speak' : 'Stop voice typing'} aria-pressed={vstate === 'recording'} title="Hold to speak"
                 onPointerDown={micDown} onKeyDown={micKey} onContextMenu={(e) => e.preventDefault()} onClick={(e) => e.preventDefault()}>
                 {vstate === 'processing' ? <span className="mspin" aria-hidden="true" /> : <MIc n="mic" size={22} />}
-              </button>
+              </button>}
             </div>
             <button className={'act' + (text.trim() ? '' : ' off')} type="submit" aria-label="Send message" disabled={!text.trim()}><MIc n="send" /></button>
           </form>
@@ -929,6 +1179,26 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
           <input ref={fcR} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFile} />
         </footer>
         {call.phase !== 'idle' && renderCall()}
+        {permissionPrompt && <div className="permission-backdrop">
+          <section className="permission-dialog" role="dialog" aria-modal="true" aria-labelledby="media-permission-title">
+            <h2 id="media-permission-title">{permissionPrompt.video ? 'Camera aur mic permission' : 'Mic permission'}</h2>
+            <p>Mic ya camera ki permission chahiye. Allow dabao.</p>
+            {permissionInfo.permission === 'checking' && <p role="status">Browser permission check ho rahi hai…</p>}
+            {permissionInfo.permission === 'prompt' && <p>Browser permission abhi maangega.</p>}
+            {permissionInfo.permission === 'granted' && <p>Browser permission allowed hai; device start kar rahe hain.</p>}
+            {permissionInfo.permission === 'denied' && <p>Browser permission blocked hai.</p>}
+            {permissionInfo.ready && <p role="status">Mic permission mil gaya. Ab voice typing shuru karo.</p>}
+            {permissionInfo.message && <p role="alert">{permissionInfo.message}</p>}
+            {(permissionInfo.instructions || (permissionInfo.permission === 'denied' && permissionInstructions(navigator.userAgent || ''))) &&
+              <p className="permission-steps">{permissionInfo.instructions || permissionInstructions(navigator.userAgent || '')}</p>}
+            <div className="permission-actions">
+              <button type="button" className="permission-allow" onClick={permissionInfo.ready ? startVoiceAfterPermission : allowMedia} disabled={permissionBusy}>
+                {permissionInfo.ready ? 'Start voice typing' : permissionBusy ? 'Checking…' : permissionInfo.message || permissionInfo.permission === 'denied' ? 'Dobara try karo' : 'Allow'}
+              </button>
+              <button type="button" className="permission-cancel" onClick={() => { permissionTokenR.current++; setPermissionPrompt(null); }}>Cancel</button>
+            </div>
+          </section>
+        </div>}
         {prof && <ProfileSheet me={me} p={profiles && profiles[me]} defName={namesBase[me]} onClose={() => setProf(false)} onSaved={setProfiles} onActivity={activity} toast={toast} />}
       </main>
       {menu && (
