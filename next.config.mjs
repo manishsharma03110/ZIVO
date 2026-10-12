@@ -11,7 +11,10 @@ const securityHeaders = [
 ];
 
 // API responses are never cached by browsers or the CDN
-const apiHeaders = [{ key: 'Cache-Control', value: 'no-store' }];
+const apiHeaders = [
+  { key: 'Cache-Control', value: 'no-store' },
+  { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+];
 
 export default {
   reactStrictMode: false,

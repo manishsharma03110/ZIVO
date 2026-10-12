@@ -136,6 +136,7 @@ test('poll backup relaxes only while the channel is attached and state transitio
 
   assert.equal(isMessageSignal({ type: 'msg', id: 'message-id', at: 123 }), true);
   assert.equal(isMessageSignal({ type: 'msg', id: 'message-id', at: 123, text: 'must not be consumed' }), false);
-  assert.equal(isMessageSignal({ type: 'call', id: 'call-id', at: 123 }), false);
+  assert.equal(isMessageSignal({ type: 'call', id: 'call-id', at: 123 }), true);
+  assert.equal(isMessageSignal({ type: 'other', id: 'x', at: 123 }), false);
   assert.equal(isMessageSignal({ type: 'msg', id: 4, at: 123 }), false);
 });

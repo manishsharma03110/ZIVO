@@ -9,7 +9,7 @@ export default function SplashScreen() {
       <span className="blob blob-br" aria-hidden="true" />
       <div className="splash-main">
         <img className="logo" src="/zivo-logo.png" alt="ZIVO" width="756" height="353" decoding="async" fetchPriority="high" />
-        <p className="tag">Everything, Right When<br />You Need It</p>
+        <h1 className="tag">Everything, Right When<br />You Need It</h1>
       </div>
       <div className="splash-load">
         <span className="spinner" aria-hidden="true" />

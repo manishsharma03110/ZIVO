@@ -12,12 +12,13 @@ Photos, videos and voice messages are deleted after 24 hours. Text and call mess
    `CODE_A`, `CODE_B` (two different codes, each exactly 10 characters: letters, numbers or a mix, no spaces), `NAME_A`, `NAME_B`, `SESSION_SECRET` (32+ random characters)
    and `CRON_SECRET` (required: without it the cleanup route is closed). Optional: `MESSAGE_TTL_DAYS`.
    For realtime message notifications, also add `ABLY_API_KEY`. Without it, the app continues using adaptive polling.
-4. Redeploy.
+4. For LiveKit calling, add `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and `LIVEKIT_URL` as server-only variables. `CALL_PROVIDER=native` keeps the existing native WebRTC path. Set `NEXT_PUBLIC_SITE_URL` to the canonical production origin; `SITE_URL` remains a compatibility fallback.
+5. Redeploy.
 
 ## How it works
-- Message content remains in Redis and is fetched through the authenticated poll API. If `ABLY_API_KEY` is configured, Ably sends only a message ID/timestamp signal; a subscribe-only token is issued per chat session. If Ably is disabled or unreachable, adaptive polling remains the fallback.
+- Message content remains in Redis and is fetched through the authenticated API. If `ABLY_API_KEY` is configured, Ably carries only a tiny `{type, id, at}` signal and never message text, media URLs or call data; a chat-scoped token is issued per session. If Ably is disabled or unreachable, adaptive polling remains the fallback.
 - Photos and videos upload directly from the browser to Blob (max 50 MB). Expired media is removed by a request-limited cleanup after successful login (up to five referenced files per six hours) and by the daily cron job (`vercel.json`), which also removes old text messages and sweeps unreferenced Blob files.
-- Calls use WebRTC, browser to browser. The server only passes the offer/answer and a short heartbeat.
+- With LiveKit configured, call media passes through LiveKit servers. The connection is encrypted in transit, but it is not end-to-end encrypted by default. Call setup and state remain in the authenticated API/Redis. Set `CALL_PROVIDER=native` to roll back to the existing native WebRTC path.
 - For low-latency Redis access, set the Vercel function region to match the Upstash Redis region. Check the Redis database region in the Upstash/Vercel Storage dashboard and the deployed function region in Vercel Project Settings > Functions. Use `bom1` for Mumbai only if Redis is in Mumbai, or `sin1` for Singapore only if Redis is in Singapore; do not choose based on user location. Set the matching function region in Vercel Project Settings > Functions before deployment.
 - If a call does not connect on strict networks (office or mobile NAT), add a TURN server (`TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`).
 - Idle logout: only sending or receiving messages, typing, voice typing, or a call resets the timer. The server cookie also expires after 2 minutes.
@@ -40,7 +41,7 @@ Photos, videos and voice messages are deleted after 24 hours. Text and call mess
 
 ## Search engine indexing
 - Only the homepage (login page) can be indexed. Chat content is behind login, and `/api/` is blocked in robots.
-- After deploying, set `SITE_URL=https://your-domain.com` in the Vercel environment (used for canonical URL, sitemap.xml and robots).
+- After deploying, set `NEXT_PUBLIC_SITE_URL=https://your-domain.com` in the Vercel environment (used for canonical URL, sitemap.xml and robots).
 - Title and description are in `app/layout.js`; the favicon is `app/icon.svg`.
 
 ## Chat features

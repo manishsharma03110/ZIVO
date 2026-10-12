@@ -187,7 +187,7 @@ em { font-style: normal; color: var(--p1); }
 .mchat .cr>.ib{width:46px;height:46px}
 .mchat .fld{flex:1;min-width:0;display:flex;align-items:flex-end;border:1.5px solid var(--line);background:var(--panel);border-radius:26px;padding:2px 5px;min-height:46px;transition:border-color .2s,box-shadow .2s}
 .mchat .fld:focus-within{border-color:var(--p1);box-shadow:0 0 0 4px rgba(124,77,255,.14)}
-.mchat textarea{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;font:inherit;font-size:16px;line-height:1.35;color:var(--tx);padding:11px 4px;max-height:120px}
+.mchat textarea{flex:1;min-width:0;word-break:break-word;overflow-wrap:anywhere;scrollbar-width:thin;scrollbar-color:var(--mut) transparent;border:0;outline:0;resize:none;background:transparent;font:inherit;font-size:16px;line-height:1.35;color:var(--tx);padding:11px 4px;max-height:120px}
 .mchat textarea::placeholder{color:var(--mut)}
 .mchat .fb{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--mut);flex:none;transition:color .2s,transform .15s,background .2s}
 .mchat .fb:hover{color:var(--ic);background:var(--chip)}
@@ -223,6 +223,12 @@ em { font-style: normal; color: var(--p1); }
 .mchat .qr button.sel{background:var(--chip)}
 .mchat .toast{position:absolute;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translate(-50%,10px);background:#241b52;color:#fff;padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:30;white-space:nowrap}
 .mchat .toast.on{opacity:1;transform:translate(-50%,0)}
+.mchat .latest{position:absolute;right:16px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:20;width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ic);box-shadow:var(--sh)}
+.mchat .latest:focus-visible{outline:2px solid var(--p1);outline-offset:2px}
+.mchat .latest svg{transform:rotate(180deg)}
+.mchat .rb progress{width:100%;height:4px;accent-color:var(--p1)}
+.error-boundary{min-height:100dvh;display:grid;place-content:center;gap:12px;padding:24px;text-align:center;background:var(--panel);color:var(--tx)}
+.error-boundary button{min-height:44px;padding:0 18px;border-radius:14px;background:var(--p1);color:#fff;font:inherit;font-weight:700}
 .mchat .call{position:absolute;inset:0;z-index:40;display:flex;flex-direction:column;color:#fff;background:radial-gradient(120% 70% at 50% 0%,#5b3bd8 0%,#2a1a7a 45%,#120c3a 100%);animation:zoom .3s cubic-bezier(.2,.9,.3,1.1);overflow:hidden}
 .mchat .call.vid{background:radial-gradient(120% 70% at 50% 20%,#7a55e6 0%,#3a2a82 45%,#1a1238 100%)}
 .mchat .call.conn{background:linear-gradient(160deg,#4b3a9a,#1b1440 60%,#0d0a26)}

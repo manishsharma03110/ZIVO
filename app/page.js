@@ -8,6 +8,7 @@ import { clearPermissionChoice, getPermissionChoice, inAppBrowserMessage, observ
 import { STRINGS } from '@/lib/strings';
 import { CALL_SETUP_TIMEOUT_MS, ICE_DISCONNECTED_GRACE_MS, ICE_RESTART_TIMEOUT_MS, getSelectedCandidateType, isCallSetupPhase, isFastPollingPhase, setupTimeoutDelay, shouldRestartIce } from '@/lib/call-state';
 import { CHAT_CHANNEL, createChannelStateHandler, isMessageSignal, pollingInterval } from '@/lib/realtime';
+import { CALL_MAX_DURATION_MS, cleanupLiveKitRoom } from '@/lib/livekit';
 import SplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
 import PermissionDialog from './components/PermissionDialog';
@@ -48,7 +49,7 @@ export default function Page() {
   if (s.status === 'out') return <LoginScreen onDone={loggedIn} />;
   // The server cookie is the only source of identity. If it no longer matches this tab, reload who we are (Chat remounts via key).
   const resync = () => { loggedIn().catch(() => setS({ status: 'out' })); };
-  return <Chat key={s.user} me={s.user} names={s.names} ice={s.ice} blob={s.blob} stt={!!s.stt} onLogout={logout} onResync={resync} />;
+  return <Chat key={s.user} me={s.user} names={s.names} ice={s.ice} blob={s.blob} stt={!!s.stt} callProvider={s.callProvider || 'native'} onLogout={logout} onResync={resync} />;
 }
 
 const M={pause:'<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>',up:'<path d="m18 15-6-6-6 6"/>',micoff:'<path d="m2 2 20 20M18.9 10.9V12a7 7 0 0 1-.7 3M15 9.3V4a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M5 10v2a7 7 0 0 0 11.5 5.3M12 19v3"/>',camoff:'<path d="M10.7 5H14a2 2 0 0 1 2 2v3.3l5.6 3.4V7.9L16 10.5M2 2l20 20M2 7v10a2 2 0 0 0 2 2h12"/>',speaker:'<path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',arrow:'<path d="M19 12H5M12 19l-7-7 7-7"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',video:'<path d="m22 8-6 4 6 4V8z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',plus:'<path d="M12 5v14M5 12h14"/>',smile:'<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/>',clip:'<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',send:'<path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/>',check:'<path d="M20 6 9 17l-5-5"/>',mic:'<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/>',cc:'<path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16"/>',badge:'<path d="M3.9 8.6a4 4 0 0 1 4.7-4.7 4 4 0 0 1 6.8 0 4 4 0 0 1 4.8 4.8 4 4 0 0 1 0 6.8 4 4 0 0 1-4.8 4.7 4 4 0 0 1-6.7 0 4 4 0 0 1-4.8-4.7 4 4 0 0 1 0-6.9z" fill="currentColor" stroke="none"/><path d="m9 12 2 2 4-4" stroke="#fff"/>',user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="currentColor"/>',image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8"/>',reply:'<path d="m9 17-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4"/>',copy:'<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',play:'<path d="M6 3l14 9-14 9z" fill="currentColor"/>',more:'<circle cx="12" cy="5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="19" r="1.6" fill="currentColor"/>',edit:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',globe:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>'};
@@ -160,7 +161,7 @@ function ProfileSheet({ me, p, defName, onClose, onSaved, onActivity, toast }) {
   );
 }
 
-function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
+function Chat({ me, names: namesBase, ice, blob, stt, callProvider, onLogout, onResync }) {
   const connT = useRef(0);
   const callTok = useRef(0);
   const ackR = useRef('');
@@ -193,6 +194,8 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [showLatest, setShowLatest] = useState(false);
   const [left, setLeft] = useState(IDLE_MS / 1000);
   const [now, setNow] = useState(Date.now());
   const [call, setCallState] = useState({ phase: 'idle' });
@@ -241,6 +244,14 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const localV = useRef(null);
   const remoteV = useRef(null);
   const remoteA = useRef(null);
+  const liveKitRoomR = useRef(null);
+  const liveKitMediaR = useRef(null);
+  const liveKitTracksR = useRef(new Set());
+  const liveKitLocalTracksR = useRef([]);
+  const liveKitStatsTimerR = useRef(null);
+  const [liveKitQuality, setLiveKitQuality] = useState('');
+  const [liveKitStats, setLiveKitStats] = useState('');
+  const [cameraFacing, setCameraFacing] = useState('user');
   const aliveR = useRef(true);
 
   const setCall = (c) => { callR.current = c; setCallState(c); };
@@ -256,6 +267,18 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     clearTimeout(discT.current); clearTimeout(restartT.current); clearTimeout(callSetupT.current); ackR.current = '';
     try { pcR.current && pcR.current.close(); } catch {}
     pcR.current = null;
+    cleanupLiveKitRoom(liveKitRoomR.current, liveKitLocalTracksR.current);
+    liveKitRoomR.current = null;
+    clearInterval(liveKitStatsTimerR.current);
+    liveKitStatsTimerR.current = null;
+    for (const track of liveKitTracksR.current) {
+      try { track.detach().forEach((element) => element.remove()); } catch {}
+    }
+    liveKitTracksR.current.clear();
+    liveKitLocalTracksR.current = [];
+    liveKitMediaR.current?.replaceChildren();
+    setLiveKitQuality('');
+    setLiveKitStats('');
     if (localS.current) localS.current.getTracks().forEach((t) => t.stop());
     if (remoteS.current) remoteS.current.getTracks().forEach((t) => { try { t.stop(); } catch {} });
     if (localV.current) localV.current.srcObject = null;
@@ -454,20 +477,20 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
 
   async function startIceRestart(pc) {
     if (pcR.current !== pc || iceRestartedR.current) return;
-    if (!pc.restartIce) return failCall('Is browser mein ICE restart supported nahi. Call ko Retry karo.');
+    if (!pc.restartIce) return failCall(STRINGS.calls.reconnectUnsupported);
     const states = [pc.connectionState, pc.iceConnectionState];
     const restartState = states.includes('disconnected') ? 'disconnected' : states.includes('failed') ? 'failed' : '';
     if (!restartState || !shouldRestartIce(restartState === 'failed' ? 'disconnected' : restartState, iceRestartedR.current)) return;
     iceRestartedR.current = true;
     const callId = callR.current.id;
-    if (!callId) return failCall('Network disconnect ho gaya. Call ko Retry karo.');
+    if (!callId) return failCall(STRINGS.calls.networkFailed);
     const restartId = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(16) + Math.random().toString(16).slice(2, 10);
     try {
       if (callR.current.dir === 'in') {
         const response = await post('/api/call', { action: 'restart-request', id: callId, restartId });
         if (!response.ok) throw new Error('restart request rejected');
         restartT.current = setTimeout(() => {
-          if (pcR.current === pc && pc.connectionState !== 'connected') failCall('Network wapas nahi aaya. Call ko Retry karo.');
+          if (pcR.current === pc && pc.connectionState !== 'connected') failCall(STRINGS.calls.networkFailed);
         }, ICE_RESTART_TIMEOUT_MS);
         return;
       }
@@ -477,10 +500,10 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       const response = await post('/api/call', { action: 'restart-offer', id: callId, restartId, description: pc.localDescription });
       if (!response.ok) throw new Error('restart offer rejected');
       restartT.current = setTimeout(() => {
-        if (pcR.current === pc && pc.connectionState !== 'connected') failCall('Network wapas nahi aaya. Call ko Retry karo.');
+        if (pcR.current === pc && pc.connectionState !== 'connected') failCall(STRINGS.calls.networkFailed);
       }, ICE_RESTART_TIMEOUT_MS);
     } catch {
-      failCall('Network reconnect nahi hua. Call ko Retry karo.');
+      failCall(STRINGS.calls.networkFailed);
     }
   }
 
@@ -497,13 +520,17 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   async function startCall(video, grantedStream, downgraded = false) {
     if (!grantedStream) { openPermissionPrompt({ kind: 'call', video }); return; }
     if (callR.current.phase !== 'idle') { grantedStream.getTracks().forEach((track) => track.stop()); return; }
+    if (callProvider === 'livekit') {
+      await startLiveKitCall(video, grantedStream, downgraded);
+      return;
+    }
     const useVideo = video && !downgraded;
     stopVoiceNote(false); voiceR.current.halt();
     activity();
     const tok = ++callTok.current;
     const stale = () => callTok.current !== tok || callR.current.phase !== 'calling';
     const hasTurn = ice.some((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url || '')));
-    const notice = hasTurn ? '' : 'TURN relay configured nahi hai; restricted network par call connect na ho sakegi.';
+    const notice = hasTurn ? '' : STRINGS.calls.turnNotice;
     if (!hasTurn && process.env.NODE_ENV !== 'production') console.warn('[call] TURN is not configured; restrictive networks may block peer connection.');
     setCall({ phase: 'calling', video: useVideo, dir: 'out', notice, startedAt: Date.now() });
     tickR.current && tickR.current();
@@ -517,7 +544,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       if (!r.ok) {
         if (!stale()) {
           teardown();
-          setCall({ phase: 'failed', video: useVideo, error: r.status === 409 ? 'Doosri call pehle se chal rahi hai.' : 'Call start nahi ho payi. Dobara try karo.' });
+          setCall({ phase: 'failed', video: useVideo, error: r.status === 409 ? STRINGS.calls.busy : STRINGS.calls.startFailed });
         }
         return;
       }
@@ -529,7 +556,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     } catch (e) {
       if (callTok.current !== tok) return; // a newer call has taken over
       teardown();
-      setCall({ phase: 'failed', video: useVideo, error: 'Call start nahi ho payi. Network aur permissions check karke Retry karo.' });
+      setCall({ phase: 'failed', video: useVideo, error: STRINGS.calls.startFailed });
     }
   }
 
@@ -537,11 +564,15 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const cur = callR.current;
     if (!grantedStream) { if (cur.phase === 'incoming') openPermissionPrompt({ kind: 'accept', video: cur.video, id: cur.id }); return; }
     if (cur.phase !== 'incoming' || cur.id !== callR.current.id) { grantedStream.getTracks().forEach((track) => track.stop()); return; }
+    if (callProvider === 'livekit') {
+      await acceptLiveKit(grantedStream, downgraded);
+      return;
+    }
     const useVideo = cur.video && !downgraded;
     stopVoiceNote(false); voiceR.current.halt();
     connT.current = 0;
     const hasTurn = ice.some((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => /^turns?:/i.test(url || '')));
-    const notice = hasTurn ? '' : 'TURN relay configured nahi hai; restricted network par call connect na ho sakegi.';
+    const notice = hasTurn ? '' : STRINGS.calls.turnNotice;
     if (!hasTurn && process.env.NODE_ENV !== 'production') console.warn('[call] TURN is not configured; restrictive networks may block peer connection.');
     setCall({ ...cur, video: useVideo, phase: 'connecting', notice, startedAt: Date.now() });
     tickR.current && tickR.current();
@@ -557,7 +588,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       tickR.current && tickR.current();
     } catch {
       await hangup('declined');
-      setCall({ phase: 'failed', video: useVideo, error: 'Call answer nahi ho paya. Dobara call karke try karo.' });
+      setCall({ phase: 'failed', video: useVideo, error: STRINGS.calls.answerFailed });
     }
   }
 
@@ -578,7 +609,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
         await waitIce(pc);
         const response = await post('/api/call', { action: 'restart-answer', id: c.id, restartId: offer.id, description: pc.localDescription });
         if (!response.ok) throw new Error('restart answer rejected');
-      } catch { failCall('Network reconnect nahi hua. Call ko Retry karo.'); }
+      } catch { failCall(STRINGS.calls.networkFailed); }
     }
     const answer = c.restartAnswer;
     if (answer && answer.id !== restartAnswerSeenR.current && answer.to === me) {
@@ -586,7 +617,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       try {
         await pc.setRemoteDescription(answer.description);
         clearTimeout(restartT.current);
-      } catch { failCall('Network reconnect nahi hua. Call ko Retry karo.'); }
+      } catch { failCall(STRINGS.calls.networkFailed); }
     }
   }
 
@@ -611,29 +642,54 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     }
     if (c.status === 'active' && !c.video && cur.video) {
       if (localS.current) localS.current.getVideoTracks().forEach((track) => track.stop());
+      if (callProvider === 'livekit' && liveKitRoomR.current) {
+        for (const track of liveKitLocalTracksR.current.filter((item) => item.kind === 'video')) {
+          liveKitRoomR.current.localParticipant.unpublishTrack(track, true).catch(() => {});
+        }
+      }
       if (pcR.current) pcR.current.getSenders().filter((sender) => sender.track && sender.track.kind === 'video')
         .forEach((sender) => { sender.replaceTrack(null).catch(() => {}); });
       setCamOff(true);
     }
-    if (c.status === 'active' && c.from === me && cur.phase === 'calling' && c.answer && !answeredR.current) {
+    if (callProvider === 'livekit' && c.status === 'active' && c.from === me && cur.phase === 'ringing') {
+      setCall({ ...cur, phase: 'connecting' });
+    }
+    if (callProvider !== 'livekit' && c.status === 'active' && c.from === me && cur.phase === 'calling' && c.answer && !answeredR.current) {
       answeredR.current = true;
       ackR.current = c.id; // tell the server we have the answer so it stops sending it
       try {
         await pcR.current.setRemoteDescription(c.answer);
         if (callR.current.phase !== 'connected') setCall({ ...callR.current, video: c.video, phase: 'connecting' });
-      } catch { failCall('Call answer process nahi ho paya. Dobara try karo.'); }
+      } catch { failCall(STRINGS.calls.answerFailed); }
     }
     if (c.status === 'active') await applyRestartSignaling(c);
   }
 
   // While connected, send a heartbeat so a call abandoned without a clean hang-up never blocks new calls
   useEffect(() => {
-    if (call.phase !== 'connected' || !call.id) return;
+    if (!call.id || (callProvider !== 'livekit' && call.phase !== 'connected')) return;
+    if (callProvider === 'livekit' && !['connected', 'reconnecting'].includes(link)) return;
     const ping = () => post('/api/call', { action: 'ping', id: call.id }).catch(() => {});
     ping();
     const iv = setInterval(ping, 10000);
     return () => clearInterval(iv);
-  }, [call.phase, call.id]);
+  }, [call.phase, call.id, callProvider, link]);
+
+  useEffect(() => {
+    if (callProvider !== 'livekit' || !call.id || call.phase === 'idle') return;
+    const remaining = CALL_MAX_DURATION_MS - (Date.now() - (call.startedAt || call.idAt || Date.now()));
+    if (remaining <= 0) { hangup(); return; }
+    const timeout = setTimeout(() => hangup(), remaining);
+    return () => clearTimeout(timeout);
+  }, [call.id, call.phase, call.startedAt, hangup]);
+
+  useEffect(() => () => {
+    if (liveKitRoomR.current) cleanupLiveKitRoom(liveKitRoomR.current, liveKitLocalTracksR.current);
+    const callId = callR.current.id;
+    if (callId && callR.current.phase !== 'idle') {
+      try { navigator.sendBeacon('/api/call', new Blob([JSON.stringify({ action: 'end', id: callId })], { type: 'application/json' })); } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     if (!isCallSetupPhase(call.phase)) return;
@@ -642,8 +698,8 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       const current = callR.current;
       if (current.phase !== phase || current.id !== id) return;
       failCall(phase === 'calling'
-        ? 'Call 30 seconds mein start nahi hui. Network/TURN check karke Retry karo.'
-        : 'Call 30 seconds mein connect nahi hui. Network/TURN check karke Retry karo.');
+        ? STRINGS.calls.startTimeout
+        : STRINGS.calls.connectTimeout);
     }, setupTimeoutDelay(call.startedAt || Date.now()));
     return () => clearTimeout(callSetupT.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -660,6 +716,9 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const h = () => {
       const c = callR.current;
       if (c.phase === 'idle' || !c.id) return;
+      cleanupLiveKitRoom(liveKitRoomR.current, liveKitLocalTracksR.current);
+      liveKitRoomR.current = null;
+      if (localS.current) localS.current.getTracks().forEach((track) => track.stop());
       try { navigator.sendBeacon('/api/call', new Blob([JSON.stringify({ action: 'end', id: c.id })], { type: 'application/json' })); } catch {}
     };
     window.addEventListener('pagehide', h);
@@ -674,14 +733,30 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   }, [call.phase, call.video]);
 
   function toggleMic() {
+    if (callProvider === 'livekit' && liveKitRoomR.current) {
+      const t = localS.current && localS.current.getAudioTracks()[0];
+      if (t) { t.enabled = !t.enabled; setMuted(!t.enabled); }
+      return;
+    }
     const t = localS.current && localS.current.getAudioTracks()[0];
     if (t) { t.enabled = !t.enabled; setMuted(!t.enabled); }
   }
   function toggleCam() {
+    if (callProvider === 'livekit' && liveKitRoomR.current) {
+      const t = localS.current && localS.current.getVideoTracks()[0];
+      if (t) { t.enabled = !t.enabled; setCamOff(!t.enabled); }
+      return;
+    }
     const t = localS.current && localS.current.getVideoTracks()[0];
     if (t) { t.enabled = !t.enabled; setCamOff(!t.enabled); }
   }
   function retryRemotePlayback() {
+    if (liveKitMediaR.current) {
+      const media = liveKitMediaR.current.querySelectorAll('audio,video');
+      Promise.all(Array.from(media, (element) => element.play().catch(() => setPlaybackNeedsGesture(true))))
+        .then(() => setPlaybackNeedsGesture(false));
+      return;
+    }
     const media = callR.current.video ? remoteV.current : remoteA.current;
     if (!media) return;
     try { Promise.resolve(media.play()).then(() => setPlaybackNeedsGesture(false)).catch(() => setPlaybackNeedsGesture(true)); }
@@ -742,6 +817,201 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       if (realtime) realtime.close();
     };
   }, []);
+
+  async function connectLiveKit(callId, stream, video) {
+    try {
+      const response = await fetch('/api/call/token', { cache: 'no-store' });
+      const credentials = await response.json();
+      if (!response.ok || !credentials.token || !credentials.url) throw new Error('calls provider unavailable');
+      const { Room, RoomEvent, Track, ConnectionQuality } = await import('livekit-client');
+      const room = new Room({ adaptiveStream: true, dynacast: true });
+      liveKitRoomR.current = room;
+      const attachTrack = (track) => {
+        const element = track.attach();
+        element.autoplay = true;
+        element.playsInline = true;
+        if (track.kind === Track.Kind.Video) {
+          element.className = track.source === Track.Source.Camera ? 'remote' : 'remote';
+          element.setAttribute('playsinline', '');
+          element.muted = true;
+        } else {
+          element.className = 'remote-audio';
+        }
+        liveKitMediaR.current?.appendChild(element);
+        liveKitTracksR.current.add(track);
+        element.play().catch(() => setPlaybackNeedsGesture(true));
+      };
+      room.on(RoomEvent.TrackSubscribed, (track) => attachTrack(track));
+      room.on(RoomEvent.TrackUnsubscribed, (track) => {
+        for (const element of track.detach()) element.remove();
+        liveKitTracksR.current.delete(track);
+      });
+      room.on(RoomEvent.Reconnecting, () => {
+        setLink('reconnecting');
+        setCall({ ...callR.current, phase: 'connecting' });
+      });
+      room.on(RoomEvent.Reconnected, () => {
+        setLink('connected');
+        if (callR.current.phase !== 'idle') {
+          connT.current = connT.current || Date.now();
+          setCall({ ...callR.current, phase: 'connected' });
+        }
+        tickR.current?.();
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        setLink('disconnected');
+        if (callR.current.phase !== 'idle') failCall(STRINGS.calls.temporarilyUnavailable);
+      });
+      room.on(RoomEvent.ParticipantConnected, () => {
+        connT.current = Date.now();
+        setCall({ ...callR.current, phase: 'connected' });
+        setLink('connected');
+      });
+      room.on(RoomEvent.ParticipantDisconnected, () => {
+        setCall({ ...callR.current, phase: 'connecting' });
+      });
+      room.on(RoomEvent.ConnectionQualityChanged, (quality) => {
+        setLiveKitQuality(quality === ConnectionQuality.Excellent || quality === ConnectionQuality.Good
+          ? STRINGS.calls.connectionGood : STRINGS.calls.connectionPoor);
+      });
+      room.on(RoomEvent.ParticipantConnected, () => {
+        if (process.env.NODE_ENV !== 'production' && !liveKitStatsTimerR.current) {
+          liveKitStatsTimerR.current = setInterval(async () => {
+            if (liveKitRoomR.current !== room) {
+              clearInterval(liveKitStatsTimerR.current);
+              liveKitStatsTimerR.current = null;
+              return;
+            }
+            const reports = [];
+            try {
+              for (const participant of room.remoteParticipants.values()) {
+                for (const publication of participant.trackPublications.values()) {
+                  if (publication.track?.getRTCStatsReport) {
+                    const report = await publication.track.getRTCStatsReport();
+                    if (report) reports.push(...report.values());
+                  }
+                }
+              }
+            } catch (error) {
+              console.warn('Unable to read LiveKit debug stats', error);
+              return;
+            }
+            const pair = reports.find((item) => item.type === 'candidate-pair' && item.state === 'succeeded' && item.nominated);
+            const received = reports.filter((item) => item.type === 'inbound-rtp' && item.kind === 'video');
+            const lost = received.reduce((sum, item) => sum + (item.packetsLost || 0), 0);
+            const total = received.reduce((sum, item) => sum + (item.packetsReceived || 0) + (item.packetsLost || 0), 0);
+            setLiveKitStats(`RTT ${pair?.currentRoundTripTime ? Math.round(pair.currentRoundTripTime * 1000) + ' ms' : '—'} · packet loss ${total ? Math.round(lost * 100 / total) + '%' : '—'}`);
+          }, 5000);
+        }
+      });
+      setLink('connecting');
+      await room.connect(credentials.url, credentials.token);
+      if (liveKitRoomR.current !== room || callR.current.id !== callId) {
+        await room.disconnect();
+        return;
+      }
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        await room.localParticipant.publishTrack(audioTrack, { source: Track.Source.Microphone });
+        liveKitLocalTracksR.current.push(audioTrack);
+      }
+      if (video) {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          await room.localParticipant.publishTrack(videoTrack, { source: Track.Source.Camera });
+          liveKitLocalTracksR.current.push(videoTrack);
+        }
+      }
+      if (room.remoteParticipants.size) {
+        connT.current = Date.now();
+        setCall({ ...callR.current, phase: 'connected' });
+      } else if (callR.current.dir === 'out') {
+        setCall({ ...callR.current, phase: 'ringing' });
+      }
+    } catch {
+      if (liveKitRoomR.current) {
+        try { await liveKitRoomR.current.disconnect(); } catch {}
+        liveKitRoomR.current = null;
+      }
+      stream.getTracks().forEach((track) => track.stop());
+      try { await post('/api/call', { action: 'end', id: callId }); } catch {}
+      setCall({ phase: 'failed', video, error: STRINGS.calls.temporarilyUnavailable });
+    }
+  }
+
+  async function startLiveKitCall(video, stream, downgraded) {
+    const useVideo = video && !downgraded;
+    stopVoiceNote(false); voiceR.current.halt(); activity();
+    const call = { phase: 'calling', video: useVideo, dir: 'out', startedAt: Date.now() };
+    setCall(call);
+    try {
+      const response = await post('/api/call', { action: 'start', video: useVideo });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'call start failed');
+      const started = { ...call, id: result.id, idAt: Date.now() };
+      localS.current = stream;
+      setCall(started);
+      await connectLiveKit(result.id, stream, useVideo);
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      setCall({ phase: 'failed', video: useVideo, error: STRINGS.calls.temporarilyUnavailable });
+    }
+  }
+
+  async function acceptLiveKit(stream, downgraded = false) {
+    const current = callR.current;
+    if (!current.id || current.phase !== 'incoming') {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    async function flipLiveKitCamera() {
+      const room = liveKitRoomR.current;
+      if (!room || !navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
+        if (cameras.length < 2) return;
+        const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+        const selected = cameras.find((device) => device.label.toLowerCase().includes(nextFacing)) || cameras[cameraFacing === 'user' ? 1 : 0];
+        if (await room.switchActiveDevice('videoinput', selected.deviceId)) setCameraFacing(nextFacing);
+      } catch {
+        toast(STRINGS.calls.temporarilyUnavailable);
+      }
+    }
+
+    async function selectLiveKitAudioOutput() {
+      const room = liveKitRoomR.current;
+      if (!room || !navigator.mediaDevices?.enumerateDevices) {
+        toggleSpk();
+        return;
+      }
+      try {
+        const outputs = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'audiooutput');
+        const earpiece = outputs.find((device) => /earpiece|receiver/i.test(device.label));
+        const speaker = outputs.find((device) => /speaker/i.test(device.label)) || outputs.find((device) => device.deviceId === 'default');
+        const target = spk ? earpiece : speaker;
+        if (target) {
+          await room.switchActiveDevice('audiooutput', target.deviceId);
+          setSpk(!spk);
+        } else toggleSpk();
+      } catch {
+        toggleSpk();
+      }
+    }
+    const useVideo = current.video && !downgraded;
+    stopVoiceNote(false); voiceR.current.halt(); connT.current = 0;
+    localS.current = stream;
+    setCall({ ...current, video: useVideo, phase: 'connecting', startedAt: Date.now() });
+    try {
+      const response = await post('/api/call', { action: 'answer', id: current.id, video: useVideo });
+      if (!response.ok) throw new Error('call ended');
+      await connectLiveKit(current.id, stream, useVideo);
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      await hangup('declined');
+      setCall({ phase: 'failed', video: useVideo, error: STRINGS.calls.temporarilyUnavailable });
+    }
+  }
 
   // ---------- polling (auto refresh) ----------
   useEffect(() => {
@@ -868,9 +1138,14 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     } finally { sendingR.current = false; }
   }
 
-  async function uploadFile(f) {
+  async function uploadFile(f, onProgress) {
     if (blob) {
-      const b = await upload(f.name, f, { access: 'public', handleUploadUrl: '/api/upload', contentType: f.type });
+      const b = await upload(f.name, f, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+        contentType: f.type,
+        onUploadProgress: onProgress,
+      });
       return b.url;
     }
     const fd = new FormData(); fd.append('file', f);
@@ -929,12 +1204,13 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const file = new File([new Blob(chunks, { type })], `voice-${Date.now()}.${ext}`, { type });
     activity(); busyR.current = true; setBusy('Sending voice message…');
     try {
-      const url = await uploadFile(file);
+      setUploadProgress(null);
+      const url = await uploadFile(file, ({ percentage }) => setUploadProgress(Math.round(percentage)));
       const m = await postMsg({ type: 'voice', url, dur });
       if (!m.ok) throw new Error('send failed');
       tickR.current && tickR.current();
-    } catch { toast('The voice message could not be sent. Please try again.'); }
-    busyR.current = false; setBusy(''); activity();
+    } catch { toast(STRINGS.ui.uploadFailed); }
+    busyR.current = false; setBusy(''); setUploadProgress(null); activity();
   }
   useEffect(() => () => {
     const st = vnR.current;
@@ -952,20 +1228,25 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const type = f.type.startsWith('image/') ? 'image' : f.type.startsWith('video/') ? 'video' : null;
     if (!type) return alert('You can only send images or videos.');
     if (f.size > 50 * 1024 * 1024) return alert('The file must be smaller than 50 MB.');
-    activity(); busyR.current = true; setBusy('Uploading…');
+    activity(); busyR.current = true; setBusy(STRINGS.ui.uploadProgress); setUploadProgress(null);
     try {
-      const url = await uploadFile(f);
+      const url = await uploadFile(f, ({ percentage }) => setUploadProgress(Math.round(percentage)));
       const m = await postMsg({ type, url });
       if (!m.ok) throw new Error('could not send');
       tickR.current && tickR.current();
-    } catch (err) { alert('Upload failed' + (err && err.message ? ': ' + err.message : '.')); }
-    busyR.current = false; setBusy(''); activity();
+    } catch { toast(STRINGS.ui.uploadFailed); }
+    busyR.current = false; setBusy(''); setUploadProgress(null); activity();
   }
 
   const hoursLeft = (m) => Math.max(1, Math.ceil((m.expiresAt - now) / 3600000));
   const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const [spk, setSpk] = useState(true);
   const toggleSpk = () => {
+    if (liveKitMediaR.current) {
+      for (const media of liveKitMediaR.current.querySelectorAll('audio,video')) media.muted = spk;
+      setSpk(!spk);
+      return;
+    }
     const media = callR.current.video ? remoteV.current : remoteA.current;
     if (media) { media.muted = spk; if (spk) retryRemotePlayback(); }
     setSpk(!spk);
@@ -980,6 +1261,16 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const [ui, setUi] = useState(true);
   const taR = useRef(null), fiR = useRef(null), fcR = useRef(null), lp = useRef(0), swy = useRef(null), uiT = useRef(0);
   const toast = (t) => { setToast(t); setTimeout(() => setToast(''), 1800); };
+  useEffect(() => {
+    const online = () => toast(STRINGS.ui.online);
+    const offline = () => toast(STRINGS.ui.offline);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+    };
+  }, []);
   const [vstate, setVstate] = useState('idle'); // idle | starting | recording | processing
   const [vtap, setVtap] = useState(false);      // true while a tap-to-record session is running
   const [lang, setLang] = useState('en-IN');
@@ -1011,7 +1302,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const micDown = (e) => {
     if (e.button > 0 || e.isPrimary === false) return;
     const v = voiceR.current;
-    if (callR.current.phase !== 'idle') { toast('Call ke dauran voice typing band hai.'); return; }
+    if (callR.current.phase !== 'idle') { toast(STRINGS.ui.voiceDuringCall); return; }
     if (!v.active) { openPermissionPrompt({ kind: 'voice', video: false }, e.currentTarget); return; }
     if (micOffR.current) micOffR.current(); // listeners of an earlier press whose release never arrived
     const up = () => { off(); v.release(); }, cancel = () => { off(); v.cancelPress(); };
@@ -1023,7 +1314,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const micKey = (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
       e.preventDefault();
-      if (callR.current.phase !== 'idle') return toast('Call ke dauran voice typing band hai.');
+      if (callR.current.phase !== 'idle') return toast(STRINGS.ui.voiceDuringCall);
       if (!voiceR.current.active) openPermissionPrompt({ kind: 'voice', video: false }, e.currentTarget);
       else voiceR.current.toggle();
     }
@@ -1148,33 +1439,42 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     const v = !!call.video, inc = call.phase === 'incoming', on = call.phase === 'connected', live = on && link === 'connected';
     const failed = call.phase === 'failed';
     const secs = connT.current ? Math.max(0, Math.floor((now - connT.current) / 1000)) : 0;
-    const status = failed ? call.error : inc ? `Incoming ${v ? 'video' : 'voice'} call…` : live ? mmss(secs) : on || call.phase === 'connecting' ? 'Connecting…' : v ? 'Video calling…' : 'Calling…';
+    const status = failed ? call.error
+      : inc ? (v ? STRINGS.calls.incomingVideo : STRINGS.calls.incomingVoice)
+        : live ? mmss(secs)
+          : link === 'reconnecting' ? STRINGS.calls.reconnecting
+            : call.phase === 'ringing' ? STRINGS.calls.ringing
+              : call.phase === 'connecting' ? STRINGS.calls.connecting
+                : STRINGS.calls.calling;
     const B = (cls, icon, label, fn) => (
       <div className="cw"><button type="button" className={'cb ' + cls} aria-label={label} aria-pressed={cls === 'on' ? true : undefined} onClick={fn}><MIc n={icon} size={24} /></button><span>{label}</span></div>
     );
     return (
       <section className={'call' + (v ? ' vid' : '') + (vconn ? ' conn' : '') + (inc ? ' in' : '') + (vconn && !ui ? ' idle' : '')} aria-label="Call"
         onClick={() => { setUi(true); clearTimeout(uiT.current); uiT.current = setTimeout(() => setUi(false), 3500); }}>
-        {v ? <video ref={remoteV} className="remote" autoPlay playsInline onLoadedMetadata={retryRemotePlayback} style={{ display: vconn ? 'block' : 'none' }} />
-          : <audio ref={remoteA} autoPlay playsInline onLoadedMetadata={retryRemotePlayback} />}
+        {callProvider !== 'livekit' && (v ? <video ref={remoteV} className="remote" autoPlay playsInline onLoadedMetadata={retryRemotePlayback} style={{ display: vconn ? 'block' : 'none' }} />
+          : <audio ref={remoteA} autoPlay playsInline onLoadedMetadata={retryRemotePlayback} />)}
         {v && on && <div className={'pip live' + (camOff ? ' off' : '')}><video ref={localV} autoPlay playsInline muted /></div>}
         <div className="ctop">
           <div className="big"><Av p={profiles && profiles[peer]} size={vconn ? 40 : 56} /></div>
           <h2>{names[peer]}</h2>
           <p aria-live="polite">{status}</p>
           {call.notice && !failed && <small className="call-notice">{call.notice}</small>}
-          {localS.current && !inc && !failed && <small className="mic-live">Mic chal raha hai</small>}
-          {process.env.NODE_ENV !== 'production' && iceDebug && <small className="ice-debug">{iceDebug}</small>}
+          {localS.current && !inc && !failed && <small className="mic-live">{STRINGS.calls.microphoneOn}</small>}
+          {process.env.NODE_ENV !== 'production' && (iceDebug || liveKitStats) && <small className="ice-debug">{callProvider === 'livekit' ? `${link} · ${liveKitStats}` : iceDebug}</small>}
+          {callProvider === 'livekit' && liveKitQuality && <small className="ice-debug">{liveKitQuality}</small>}
           {!v && !inc && <div className="wf" aria-hidden="true">{WAVE}</div>}
         </div>
-        {playbackNeedsGesture && <button type="button" className="playback-enable" onClick={retryRemotePlayback}>Tap to enable audio</button>}
-        <div className={'ctl' + (inc ? ' inc' : '')}>
-          {failed ? <>{B('grn', 'phone', 'Retry', () => { const video = call.video; setCall({ phase: 'idle' }); openPermissionPrompt({ kind: 'call', video }); })}{B('red', 'x', 'Close', () => setCall({ phase: 'idle' }))}</>
-            : inc ? (<>{B('red', 'phone', 'Decline', () => hangup())}{B('grn', v ? 'video' : 'phone', 'Accept', accept)}</>) : (
-            <>{B(muted ? 'on' : '', muted ? 'micoff' : 'mic', 'Mute', toggleMic)}
-              {v && B(camOff ? 'on' : '', camOff ? 'camoff' : 'video', 'Camera', toggleCam)}
-              {B(!spk ? 'on' : '', 'speaker', 'Speaker', toggleSpk)}
-              {B('red', 'phone', 'End', () => hangup())}</>
+          {callProvider === 'livekit' && <div className="livekit-media" ref={liveKitMediaR} aria-hidden="true" />}
+          {playbackNeedsGesture && <button type="button" className="playback-enable" onClick={retryRemotePlayback}>{STRINGS.calls.enableSound}</button>}
+          <div className={'ctl' + (inc ? ' inc' : '')}>
+            {failed ? <>{B('grn', 'phone', STRINGS.calls.retry, () => { const video = call.video; setCall({ phase: 'idle' }); openPermissionPrompt({ kind: 'call', video }); })}{B('red', 'x', 'Close', () => setCall({ phase: 'idle' }))}</>
+              : inc ? (<>{B('red', 'phone', 'Decline', () => hangup())}{B('grn', v ? 'video' : 'phone', 'Accept', accept)}</>) : (
+              <>{B(muted ? 'on' : '', muted ? 'micoff' : 'mic', muted ? STRINGS.calls.unmute : STRINGS.calls.mute, toggleMic)}
+                {v && B(camOff ? 'on' : '', camOff ? 'camoff' : 'video', camOff ? STRINGS.calls.cameraOn : STRINGS.calls.cameraOff, toggleCam)}
+                {v && callProvider === 'livekit' && B('', 'video', STRINGS.calls.flipCamera, flipLiveKitCamera)}
+                {B(!spk ? 'on' : '', 'speaker', spk ? STRINGS.calls.speaker : STRINGS.calls.earpiece, callProvider === 'livekit' ? selectLiveKitAudioOutput : toggleSpk)}
+                {B('red', 'phone', 'End', () => hangup())}</>
           )}
         </div>
         <div className="swh" role="presentation"
@@ -1208,7 +1508,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
           <button className="ib qcall" aria-label="Video call" onClick={() => startCall(true)}><MIc n="video" size={20} /></button>
           <button className="ib flat" data-pop="acct" aria-label="Menu" aria-haspopup="menu" aria-expanded={!!menu && menu.kind === 'acct'} onClick={(e) => (menu && menu.kind === 'acct' ? setMenu(null) : openAcct(e.currentTarget))}><MIc n="more" size={22} /></button>
         </header>
-        <div className="feed" ref={listR} role="log" aria-live="polite" onScroll={(e) => { const l = e.currentTarget; nearBottomR.current = l.scrollHeight - l.scrollTop - l.clientHeight < 120; }}>
+        <div className="feed" ref={listR} role="log" aria-live="polite" onScroll={(e) => { const l = e.currentTarget; nearBottomR.current = l.scrollHeight - l.scrollTop - l.clientHeight < 120; setShowLatest(!nearBottomR.current); }}>
           <span className="pill"><MIc n="lock" size={14} />Private chat</span>
           <span className={'pill' + (left <= 15 ? ' low' : '')}>Auto logout in {clock}</span>
           {visible.length === 0 && <span className="pill">Today</span>}
@@ -1259,13 +1559,15 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
             return <Fragment key={m.id}>{showDay && <span className="pill">{dayLabel(m.createdAt)}</span>}{row}</Fragment>;
           })}
         </div>
-        <div className={'toast' + (toastT ? ' on' : '')} role="status">{toastT}</div>
+        {showLatest && <button type="button" className="latest" aria-label={STRINGS.ui.latestMessages} onClick={() => { const feed = listR.current; if (feed) feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' }); nearBottomR.current = true; setShowLatest(false); }}><MIc n="up" size={18} /></button>}
+        <div className={'toast' + (toastT ? ' on' : '')} role="status" aria-live="polite">{toastT}</div>
         <footer className="comp">
           {replyTo && <div className="rb"><MIc n="reply" size={18} /><div><b>{replyTo.from === me ? 'You' : names[peer]}</b><span>{snip(replyTo)}</span></div><button type="button" className="fb" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><MIc n="x" size={18} /></button></div>}
           {permissionChoiceNotice && <div className="rb permission-choice-notice" role="status"><div><b>{permissionChoiceNotice.message}</b></div><button type="button" className="fb" onClick={turnOnPermission}>{STRINGS.permission.turnOn}</button></div>}
           {vstate !== 'idle' && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>{vstate === 'processing' ? 'Converting speech to text…' : vstate === 'starting' ? 'Starting microphone…' : 'Listening…'}</b><span>{vstate === 'processing' ? 'Your text will appear in the message box' : sttR.current ? 'Speak English, Hindi or Hinglish' + (vtap ? ' · tap the mic to stop' : ' · release to stop') : (lang === 'hi-IN' ? 'Hindi' : 'English (India)') + (vtap ? ' · tap the mic to stop' : ' · release to stop')}</span></div></div>}
           {vn !== null && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Recording voice message…</b><span>{mmss(vn)}</span></div><button type="button" className="fb" aria-label="Cancel recording" onClick={() => stopVoiceNote(false)}><MIc n="x" size={18} /></button><button type="button" className="fb" aria-label="Send voice message" onClick={() => stopVoiceNote(true)}><MIc n="send" size={18} /></button></div>}
-          {busy && <div className="rb"><span>{busy}</span></div>}
+          {busy && <div className="rb" role="status"><div><b>{busy}{uploadProgress !== null ? ` ${uploadProgress}%` : ''}</b>{uploadProgress !== null && <progress aria-label={`${busy} ${uploadProgress}%`} max="100" value={uploadProgress} />}</div></div>}
+          {!voiceSupported && <div className="rb" role="status"><span>{STRINGS.ui.voiceUnsupported}</span></div>}
           <div className={'pop att' + (pop === 'pa' ? ' on' : '')}>
             <button type="button" onClick={() => { fiR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#a070ff,#6a3df0)' }}><MIc n="image" /></i>Photo / Video</button>
             <button type="button" onClick={() => { fcR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#ff8ab4,#e0489a)' }}><MIc n="camera" /></i>Camera</button>

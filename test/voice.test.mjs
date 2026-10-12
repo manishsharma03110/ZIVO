@@ -152,6 +152,22 @@ test('browser: repeated final result at the same index is not appended twice', (
   h.v.halt();
 });
 
+test('browser: no-speech and unexpected aborted errors report clear messages and reset the session', () => {
+  for (const [error, message] of [
+    ['no-speech', 'No speech was detected'],
+    ['aborted', 'Voice typing was interrupted'],
+  ]) {
+    const h = harness({ engine: 'browser' });
+    h.v.press();
+    h.instances[0].onerror({ error });
+    assert.equal(h.v.state, 'idle');
+    assert.ok(h.toasts.some((toast) => toast.includes(message)));
+    h.v.press();
+    assert.equal(h.v.state, 'recording', 'a new session can start immediately');
+    h.v.halt();
+  }
+});
+
 test('browser: an engine that never fires onend is force-closed and the next recording still starts', async () => {
   const h = harness({ engine: 'browser', neverEnd: true });
   h.v.press(); h.advance(HOLD_MS + 300); h.v.release();

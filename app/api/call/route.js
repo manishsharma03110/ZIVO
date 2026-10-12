@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { authed, other } from '@/lib/auth';
 import { kvGet, kvSet, kvDel } from '@/lib/store';
 import { safe, readJson, fail } from '@/lib/http';
+import { liveKitConfigured, callCostAction } from '@/lib/livekit';
+import { scheduleMessageSignal } from '@/lib/realtime-server';
 
 const RING_MS = 60000;      // how long a call rings
 const HB_TTL = 30;          // seconds a participant heartbeat stays valid
@@ -51,13 +53,34 @@ export const POST = safe(async (req) => {
     const call = await kvGet('call');
     if (call && call.status === 'active' && (call.from === me || call.to === me) && b.id === call.id) {
       await kvSet('hb:' + me, call.id, { ex: HB_TTL });
+      const peer = other(me);
+      const [ownHeartbeat, peerHeartbeat, storedSoloSince] = await Promise.all([
+        kvGet('hb:' + me), kvGet('hb:' + peer), kvGet('call:solo:' + call.id),
+      ]);
+      const decision = callCostAction({
+        status: call.status,
+        startedAt: call.ts,
+        now: Date.now(),
+        selfPresent: ownHeartbeat === call.id,
+        peerPresent: peerHeartbeat === call.id,
+        soloSince: typeof storedSoloSince === 'number' ? storedSoloSince : null,
+      });
+      if (decision.action === 'end') {
+        await kvSet('call', { ...call, offer: null, answer: null, status: 'ended', ts: Date.now() }, { ex: 20 });
+        await Promise.all([kvDel('hb:A'), kvDel('hb:B'), kvDel('call:solo:' + call.id)]);
+      } else if (decision.action === 'wait') {
+        await kvSet('call:solo:' + call.id, decision.soloSince, { ex: 130 });
+      } else {
+        await kvDel('call:solo:' + call.id);
+      }
     }
     return NextResponse.json({ ok: true });
   }
 
   if (b.action === 'start') {
-    const offer = cleanSdp(b.offer, 'offer');
-    if (!offer) return NextResponse.json({ error: 'bad offer' }, { status: 400 });
+    const liveKit = liveKitConfigured();
+    const offer = liveKit ? null : cleanSdp(b.offer, 'offer');
+    if (!liveKit && !offer) return NextResponse.json({ error: 'bad offer' }, { status: 400 });
     return withLock(async () => {
       const call = await kvGet('call'), now = Date.now();
       if (await isBusy(call, now)) return NextResponse.json({ error: 'busy' }, { status: 409 });
@@ -66,13 +89,15 @@ export const POST = safe(async (req) => {
         video: !!b.video, offer, status: 'ringing', ts: now,
       };
       await kvSet('call', c, { ex: 120 });
+      await scheduleMessageSignal({ type: 'call', id: c.id, at: now }, { afterFn: after });
       return NextResponse.json({ ok: true, id: c.id });
     });
   }
 
   if (b.action === 'answer') {
-    const answer = cleanSdp(b.answer, 'answer');
-    if (!answer) return NextResponse.json({ error: 'bad answer' }, { status: 400 });
+    const liveKit = liveKitConfigured();
+    const answer = liveKit ? null : cleanSdp(b.answer, 'answer');
+    if (!liveKit && !answer) return NextResponse.json({ error: 'bad answer' }, { status: 400 });
     return withLock(async () => {
       const call = await kvGet('call'), now = Date.now();
       if (!call || call.to !== me || call.status !== 'ringing' || call.id !== b.id) {
@@ -80,6 +105,7 @@ export const POST = safe(async (req) => {
       }
       // The offer is no longer needed once answered; dropping it keeps every poll response small
       await kvSet('call', { ...call, video: call.video && b.video !== false, offer: null, answer, status: 'active', answeredAt: now }, { ex: 6 * 3600 });
+      await kvDel('call:solo:' + call.id);
       return NextResponse.json({ ok: true });
     });
   }
@@ -133,6 +159,7 @@ export const POST = safe(async (req) => {
       // An id is required so a late "cancel" can never end a different, newer call
       if (typeof b.id === 'string' && call && (call.from === me || call.to === me) && b.id === call.id) {
         await kvSet('call', { ...call, offer: null, answer: null, status: 'ended', ts: now }, { ex: 20 });
+        await Promise.all([kvDel('hb:A'), kvDel('hb:B'), kvDel('call:solo:' + call.id)]);
       }
       return NextResponse.json({ ok: true });
     });

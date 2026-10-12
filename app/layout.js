@@ -1,27 +1,20 @@
 import '@fontsource-variable/dm-sans';
 import '@fontsource-variable/source-serif-4';
 import './globals.css';
+import { cookies } from 'next/headers';
+import { getUser } from '@/lib/auth';
+import { createMetadata } from '@/lib/seo';
 
-const site = process.env.SITE_URL
-  || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000');
-
-export const metadata = {
-  metadataBase: new URL(site),
-  title: 'ZIVO Ration | Fresh Groceries & Daily Essentials Delivered Fast',
-  description:
-    'Shop fresh groceries and daily essentials with ZIVO Ration. Get everything you need delivered fast, right when you need it.',
-  alternates: { canonical: '/' },
-  robots: { index: true, follow: true },
-  verification: {
-    google: 'ZZrkSleHno7C4YALGV4L6VJ5isu3xs2XLxGcWkFjFTs',
-  },
-  openGraph: {
-    title: 'ZIVO Ration | Fresh Groceries & Daily Essentials Delivered Fast',
-    description: 'Shop fresh groceries and daily essentials with ZIVO Ration. Get everything you need delivered fast, right when you need it.',
-    type: 'website',
-    url: '/',
-  },
-};
+export async function generateMetadata() {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get('chat_session');
+  const request = sessionCookie
+    ? new Request('https://zivo-metadata.invalid', {
+      headers: { cookie: `chat_session=${encodeURIComponent(sessionCookie.value)}` },
+    })
+    : null;
+  return createMetadata(process.env, { privateView: !!(request && getUser(request)) });
+}
 
 export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover', themeColor: '#5304b4' };
 
