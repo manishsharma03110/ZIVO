@@ -7,6 +7,7 @@ import { normalizeMessages, quotedAuthor, setOptimisticStatus, optimisticRetryLa
 import { clearPermissionChoice, getPermissionChoice, inAppBrowserMessage, observeMediaPermission, permissionChoiceMessage, recordPermissionDecision, requestMediaStream } from '@/lib/media-permissions';
 import { STRINGS } from '@/lib/strings';
 import { CALL_SETUP_TIMEOUT_MS, ICE_DISCONNECTED_GRACE_MS, ICE_RESTART_TIMEOUT_MS, getSelectedCandidateType, isCallSetupPhase, isFastPollingPhase, setupTimeoutDelay, shouldRestartIce } from '@/lib/call-state';
+import { CHAT_CHANNEL, createChannelStateHandler, isMessageSignal, pollingInterval } from '@/lib/realtime';
 import SplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
 import PermissionDialog from './components/PermissionDialog';
@@ -230,6 +231,8 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const actR = useRef(Date.now());
   const timerR = useRef(null);
   const tickR = useRef(null);
+  const realtimeStatusR = useRef('disconnected');
+  const idleWaitR = useRef(1000);
   const pcR = useRef(null);
   const localS = useRef(null);
   const remoteS = useRef(null);
@@ -685,16 +688,72 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     catch { setPlaybackNeedsGesture(true); }
   }
 
+  useEffect(() => {
+    let active = true;
+    let realtime;
+    let channel;
+    const channelStateChanged = createChannelStateHandler({
+      onAttached: () => {
+        if (!active) return;
+        realtimeStatusR.current = 'attached';
+        tickR.current?.();
+      },
+      onUnavailable: () => {
+        if (!active) return;
+        realtimeStatusR.current = 'disconnected';
+        idleWaitR.current = 1000;
+        tickR.current?.();
+      },
+    });
+    const onSignal = (message) => {
+      if (isMessageSignal(message.data)) tickR.current?.();
+    };
+
+    import('ably').then(({ Realtime }) => {
+      if (!active) return;
+      realtime = new Realtime({
+        authCallback: async (_params, callback) => {
+          try {
+            const response = await fetch('/api/realtime/token', { cache: 'no-store' });
+            const tokenRequest = await response.json();
+            if (!response.ok || !tokenRequest || tokenRequest.enabled === false) {
+              channelStateChanged({ current: 'failed' });
+              callback('realtime disabled', null);
+              return;
+            }
+            callback(null, tokenRequest);
+          } catch {
+            channelStateChanged({ current: 'failed' });
+            callback('realtime disabled', null);
+          }
+        },
+      });
+      channel = realtime.channels.get(CHAT_CHANNEL);
+      channel.on(channelStateChanged);
+      channel.subscribe('msg', onSignal);
+    }).catch(() => channelStateChanged({ current: 'failed' }));
+
+    return () => {
+      active = false;
+      if (channel) {
+        channel.unsubscribe('msg', onSignal);
+        channel.off(channelStateChanged);
+      }
+      if (realtime) realtime.close();
+    };
+  }, []);
+
   // ---------- polling (auto refresh) ----------
   useEffect(() => {
     aliveR.current = true;
     let running = false, again = false;
-    let idleWait = 1000;
     const nextWait = () => {
-      const hidden = document.visibilityState === 'hidden';
-      if (hidden) return 7000;
-      if (isFastPollingPhase(callR.current.phase)) return 800;
-      return idleWait;
+      return pollingInterval({
+        attached: realtimeStatusR.current === 'attached',
+        hidden: document.visibilityState === 'hidden',
+        inCall: isFastPollingPhase(callR.current.phase),
+        idleWait: idleWaitR.current,
+      });
     };
     async function tick() {
       // Never run two polls at once. A second request just schedules a quick follow-up poll, so
@@ -717,7 +776,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
         if (seenQ) seenSentR.current = sentId;
         setPeerSeen(typeof d.peerSeen === 'string' ? d.peerSeen : '');
         if (d.messages) {
-          idleWait = 1000;
+          idleWaitR.current = 1000;
           if (!firstR.current) activity(); // a new message arrived or was sent
           firstR.current = false;
           lastIdR.current = d.lastId;
@@ -736,7 +795,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
         if (aliveR.current) {
           const wait = again ? 250 : nextWait();
           if (!again && document.visibilityState !== 'hidden' && callR.current.phase === 'idle') {
-            idleWait = Math.min(3000, idleWait * 2);
+            idleWaitR.current = Math.min(3000, idleWaitR.current * 2);
           }
           again = false;
           timerR.current = setTimeout(tick, wait);

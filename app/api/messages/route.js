@@ -4,6 +4,7 @@ import { authed } from '@/lib/auth';
 import { listPush, kvSet, kvGet, kvDel } from '@/lib/store';
 import { MEDIA_TTL_MS, purgeExpiredMessageMedia } from '@/lib/media';
 import { safe, readJson, fail } from '@/lib/http';
+import { scheduleMessageSignal } from '@/lib/realtime-server';
 
 const OK_URL = /^(https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\/[^\s"'<>\\]{1,400}$|\/api\/media\?id=[a-f0-9]{16}$)/i;
 const CID = /^[A-Za-z0-9-]{8,64}$/;
@@ -55,6 +56,7 @@ export const POST = safe(async (req) => {
     if (cid) await kvDel(cid).catch(() => {});
     throw e;
   }
+  await scheduleMessageSignal({ id: msg.id, at: now }, { afterFn: after });
   const cleanup = () => purgeExpiredMessageMedia().catch(() => {});
   try { after(cleanup); } catch { await cleanup(); }
   return NextResponse.json({ ok: true, id: msg.id, from: me }, { headers: { 'cache-control': 'no-store' } });

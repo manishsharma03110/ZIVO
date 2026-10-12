@@ -21,7 +21,7 @@ test('media helper enforces secure context and maps device errors', async () => 
   assert.equal(insecure.ok, false);
   assert.match(insecure.message, /HTTPS/);
   assert.match(mediaErrorInfo({ name: 'NotReadableError' }).message, /being used by another app/);
-  assert.match(mediaErrorInfo({ name: 'NotFoundError' }).message, /No microphone or camera/);
+  assert.match(mediaErrorInfo({ name: 'NotFoundError' }).message, /No microphone or camera/);npm test
   assert.match(mediaErrorInfo({ name: 'OverconstrainedError' }).message, /does not support/);
   assert.match(mediaErrorInfo({ name: 'NotAllowedError' }, 'Android Chrome').instructions, /lock or site icon/);
 });
