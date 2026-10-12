@@ -4,10 +4,12 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import { createVoiceTyping } from '@/lib/voice';
 import { normalizeMessages, quotedAuthor, setOptimisticStatus, optimisticRetryLabel } from '@/lib/messages';
-import { inAppBrowserMessage, permissionInstructions, queryMediaPermission, requestMediaStream } from '@/lib/media-permissions';
+import { clearPermissionChoice, getPermissionChoice, inAppBrowserMessage, observeMediaPermission, permissionChoiceMessage, recordPermissionDecision, requestMediaStream } from '@/lib/media-permissions';
+import { STRINGS } from '@/lib/strings';
 import { CALL_SETUP_TIMEOUT_MS, ICE_DISCONNECTED_GRACE_MS, ICE_RESTART_TIMEOUT_MS, getSelectedCandidateType, isCallSetupPhase, isFastPollingPhase, setupTimeoutDelay, shouldRestartIce } from '@/lib/call-state';
 import SplashScreen from './components/SplashScreen';
 import LoginScreen from './components/LoginScreen';
+import PermissionDialog from './components/PermissionDialog';
 
 const IDLE_MS = 60 * 1000;
 
@@ -168,6 +170,11 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const restartOfferSeenR = useRef('');
   const restartAnswerSeenR = useRef('');
   const permissionTokenR = useRef(0);
+  const permissionTriggerR = useRef(null);
+  const permissionWatchR = useRef(null);
+  useEffect(() => () => {
+    if (permissionWatchR.current) permissionWatchR.current();
+  }, []);
   const micR = useRef(false);
   const sendingR = useRef(false);
   const pendingR = useRef(null); // { t, cid } of a send that failed, so a retry of the same text is not stored twice
@@ -190,6 +197,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
   const [call, setCallState] = useState({ phase: 'idle' });
   const [link, setLink] = useState('');
   const [permissionPrompt, setPermissionPrompt] = useState(null);
+  const [permissionChoiceNotice, setPermissionChoiceNotice] = useState(null);
   const [permissionInfo, setPermissionInfo] = useState({ permission: 'unknown' });
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [playbackNeedsGesture, setPlaybackNeedsGesture] = useState(false);
@@ -270,19 +278,61 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     onLogout();
   }, [hangup, onLogout]);
 
-  function openPermissionPrompt(request) {
+  function openPermissionPrompt(request, trigger) {
+    if (permissionWatchR.current) {
+      permissionWatchR.current();
+      permissionWatchR.current = null;
+    }
+    if (getPermissionChoice(request) === 'denied') {
+      setPermissionPrompt(null);
+      setPermissionChoiceNotice({ request, message: permissionChoiceMessage(request) });
+      return;
+    }
+    permissionTriggerR.current = trigger || document.activeElement;
+    setPermissionChoiceNotice(null);
     const token = ++permissionTokenR.current;
     setPermissionPrompt({ ...request, token });
     setPermissionBusy(false);
     const embeddedMessage = inAppBrowserMessage(navigator.userAgent || '');
     if (embeddedMessage) {
-      setPermissionInfo({ permission: 'unknown', message: embeddedMessage, instructions: 'Browser ke menu se Open in Chrome/Safari chuno.' });
+      setPermissionInfo({ permission: 'unknown', message: embeddedMessage, instructions: STRINGS.permission.openExternal });
       return;
     }
     setPermissionInfo({ permission: 'checking' });
-    queryMediaPermission(navigator, request.video ? 'video' : 'audio').then((permission) => {
+    const permissionKind = request.kind === 'notifications' ? 'notifications' : request.kind === 'photo' ? 'camera' : request.video ? 'video' : 'audio';
+    permissionWatchR.current = observeMediaPermission(navigator, permissionKind, (permission) => {
       if (permissionTokenR.current === token) setPermissionInfo({ permission });
     });
+  }
+
+  function stopPermissionWatch() {
+    if (!permissionWatchR.current) return;
+    permissionWatchR.current();
+    permissionWatchR.current = null;
+  }
+
+  function cancelPermissionPrompt() {
+    permissionTokenR.current++;
+    stopPermissionWatch();
+    setPermissionPrompt(null);
+  }
+
+  function denyPermissionPrompt() {
+    const request = permissionPrompt;
+    if (!request) return;
+    recordPermissionDecision(request, 'dont-allow');
+    permissionTokenR.current++;
+    stopPermissionWatch();
+    setPermissionPrompt(null);
+    setPermissionChoiceNotice({ request, message: permissionChoiceMessage(request) });
+  }
+
+  function turnOnPermission() {
+    const request = permissionChoiceNotice && permissionChoiceNotice.request;
+    if (!request) return;
+    clearPermissionChoice(request);
+    setPermissionChoiceNotice(null);
+    openPermissionPrompt(request);
   }
 
   async function allowMedia() {
@@ -300,15 +350,18 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
       return;
     }
     if (request.kind === 'voice' && !sttR.current) {
-      result.stream.getTracks().forEach((track) => track.stop());
-      setPermissionInfo({ permission: result.permission, ready: true });
+      stopPermissionWatch();
+      setPermissionInfo({ permission: result.permission, ready: true, stream: result.stream });
       return;
     }
+    stopPermissionWatch();
     setPermissionPrompt(null);
     if (result.message) toast(result.message);
+    else if (request.video) toast(request.kind === 'photo' ? STRINGS.permission.cameraEnabled : STRINGS.permission.combinedEnabled);
+    else toast(STRINGS.permission.micEnabledToast);
     if (request.kind === 'voice') {
       const session = voiceR.current && voiceR.current.startWithStream(result.stream);
-      if (!session) toast('Voice typing start nahi hui. Dobara try karo.');
+      if (!session) toast(STRINGS.permission.voiceTypingStartFailed);
     } else if (request.kind === 'voice-note') {
       await startVoiceNote(result.stream);
     } else if (request.kind === 'accept') {
@@ -320,8 +373,10 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
 
   function startVoiceAfterPermission() {
     if (!permissionPrompt || !permissionInfo.ready) return;
+    const stream = permissionInfo.stream;
     setPermissionPrompt(null);
-    voiceR.current.toggle();
+    if (stream) voiceR.current.startWithStream(stream);
+    else voiceR.current.toggle();
   }
 
   async function failCall(message) {
@@ -898,7 +953,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     if (e.button > 0 || e.isPrimary === false) return;
     const v = voiceR.current;
     if (callR.current.phase !== 'idle') { toast('Call ke dauran voice typing band hai.'); return; }
-    if (!v.active) { openPermissionPrompt({ kind: 'voice', video: false }); return; }
+    if (!v.active) { openPermissionPrompt({ kind: 'voice', video: false }, e.currentTarget); return; }
     if (micOffR.current) micOffR.current(); // listeners of an earlier press whose release never arrived
     const up = () => { off(); v.release(); }, cancel = () => { off(); v.cancelPress(); };
     const off = () => { window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); if (micOffR.current === off) micOffR.current = null; };
@@ -910,7 +965,7 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
     if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) {
       e.preventDefault();
       if (callR.current.phase !== 'idle') return toast('Call ke dauran voice typing band hai.');
-      if (!voiceR.current.active) openPermissionPrompt({ kind: 'voice', video: false });
+      if (!voiceR.current.active) openPermissionPrompt({ kind: 'voice', video: false }, e.currentTarget);
       else voiceR.current.toggle();
     }
   };
@@ -1148,13 +1203,14 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
         <div className={'toast' + (toastT ? ' on' : '')} role="status">{toastT}</div>
         <footer className="comp">
           {replyTo && <div className="rb"><MIc n="reply" size={18} /><div><b>{replyTo.from === me ? 'You' : names[peer]}</b><span>{snip(replyTo)}</span></div><button type="button" className="fb" aria-label="Cancel reply" onClick={() => setReplyTo(null)}><MIc n="x" size={18} /></button></div>}
+          {permissionChoiceNotice && <div className="rb permission-choice-notice" role="status"><div><b>{permissionChoiceNotice.message}</b></div><button type="button" className="fb" onClick={turnOnPermission}>{STRINGS.permission.turnOn}</button></div>}
           {vstate !== 'idle' && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>{vstate === 'processing' ? 'Converting speech to text…' : vstate === 'starting' ? 'Starting microphone…' : 'Listening…'}</b><span>{vstate === 'processing' ? 'Your text will appear in the message box' : sttR.current ? 'Speak English, Hindi or Hinglish' + (vtap ? ' · tap the mic to stop' : ' · release to stop') : (lang === 'hi-IN' ? 'Hindi' : 'English (India)') + (vtap ? ' · tap the mic to stop' : ' · release to stop')}</span></div></div>}
           {vn !== null && <div className="rb" role="status"><MIc n="mic" size={18} /><div><b>Recording voice message…</b><span>{mmss(vn)}</span></div><button type="button" className="fb" aria-label="Cancel recording" onClick={() => stopVoiceNote(false)}><MIc n="x" size={18} /></button><button type="button" className="fb" aria-label="Send voice message" onClick={() => stopVoiceNote(true)}><MIc n="send" size={18} /></button></div>}
           {busy && <div className="rb"><span>{busy}</span></div>}
           <div className={'pop att' + (pop === 'pa' ? ' on' : '')}>
             <button type="button" onClick={() => { fiR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#a070ff,#6a3df0)' }}><MIc n="image" /></i>Photo / Video</button>
             <button type="button" onClick={() => { fcR.current.click(); setPop(''); }}><i style={{ background: 'linear-gradient(135deg,#ff8ab4,#e0489a)' }}><MIc n="camera" /></i>Camera</button>
-            <button type="button" onClick={startVoiceNote}><i style={{ background: 'linear-gradient(135deg,#34d399,#059669)' }}><MIc n="mic" /></i>Voice message</button>
+            <button type="button" onClick={() => startVoiceNote()}><i style={{ background: 'linear-gradient(135deg,#34d399,#059669)' }}><MIc n="mic" /></i>Voice message</button>
           </div>
           <div className={'pop emo' + (pop === 'pe' ? ' on' : '')} style={{ left: 12 }}>
             {EMOJI.map((e) => <button key={e} type="button" aria-label={'Insert ' + e} onClick={() => { setText((t) => t + e); taR.current && taR.current.focus(); }}>{e}</button>)}
@@ -1179,26 +1235,16 @@ function Chat({ me, names: namesBase, ice, blob, stt, onLogout, onResync }) {
           <input ref={fcR} type="file" accept="image/*,video/*" capture="environment" hidden onChange={onFile} />
         </footer>
         {call.phase !== 'idle' && renderCall()}
-        {permissionPrompt && <div className="permission-backdrop">
-          <section className="permission-dialog" role="dialog" aria-modal="true" aria-labelledby="media-permission-title">
-            <h2 id="media-permission-title">{permissionPrompt.video ? 'Camera aur mic permission' : 'Mic permission'}</h2>
-            <p>Mic ya camera ki permission chahiye. Allow dabao.</p>
-            {permissionInfo.permission === 'checking' && <p role="status">Browser permission check ho rahi hai…</p>}
-            {permissionInfo.permission === 'prompt' && <p>Browser permission abhi maangega.</p>}
-            {permissionInfo.permission === 'granted' && <p>Browser permission allowed hai; device start kar rahe hain.</p>}
-            {permissionInfo.permission === 'denied' && <p>Browser permission blocked hai.</p>}
-            {permissionInfo.ready && <p role="status">Mic permission mil gaya. Ab voice typing shuru karo.</p>}
-            {permissionInfo.message && <p role="alert">{permissionInfo.message}</p>}
-            {(permissionInfo.instructions || (permissionInfo.permission === 'denied' && permissionInstructions(navigator.userAgent || ''))) &&
-              <p className="permission-steps">{permissionInfo.instructions || permissionInstructions(navigator.userAgent || '')}</p>}
-            <div className="permission-actions">
-              <button type="button" className="permission-allow" onClick={permissionInfo.ready ? startVoiceAfterPermission : allowMedia} disabled={permissionBusy}>
-                {permissionInfo.ready ? 'Start voice typing' : permissionBusy ? 'Checking…' : permissionInfo.message || permissionInfo.permission === 'denied' ? 'Dobara try karo' : 'Allow'}
-              </button>
-              <button type="button" className="permission-cancel" onClick={() => { permissionTokenR.current++; setPermissionPrompt(null); }}>Cancel</button>
-            </div>
-          </section>
-        </div>}
+        {permissionPrompt && <PermissionDialog
+          request={permissionPrompt}
+          permissionInfo={permissionInfo}
+          permissionBusy={permissionBusy}
+          returnFocusTo={permissionTriggerR.current}
+          onAllow={permissionInfo.ready ? startVoiceAfterPermission : allowMedia}
+          onCancel={denyPermissionPrompt}
+          onClose={cancelPermissionPrompt}
+          onRequestAgain={allowMedia}
+        />}
         {prof && <ProfileSheet me={me} p={profiles && profiles[me]} defName={namesBase[me]} onClose={() => setProf(false)} onSaved={setProfiles} onActivity={activity} toast={toast} />}
       </main>
       {menu && (

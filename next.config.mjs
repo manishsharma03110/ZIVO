@@ -6,8 +6,8 @@ const securityHeaders = [
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
   { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
   { key: 'Referrer-Policy', value: 'same-origin' },
-  // Microphone/camera are needed for calls and voice typing; everything else is off
-  { key: 'Permissions-Policy', value: 'microphone=(self), camera=(self), geolocation=(), payment=()' },
+  // Microphone/camera are needed for calls and voice typing; everything else is off.
+  { key: 'Permissions-Policy', value: 'microphone=(self), camera=(self), geolocation=(), payment=(), usb=(), interest-cohort=(), accelerometer=(), gyroscope=(), magnetometer=(), sync-xhr=()' },
 ];
 
 // API responses are never cached by browsers or the CDN

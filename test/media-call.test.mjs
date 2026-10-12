@@ -7,7 +7,7 @@ test('permission helper detects embedded browsers and gives browser-specific ste
   assert.match(inAppBrowserMessage('Instagram 300.0 Android'), /Chrome/i);
   assert.match(permissionInstructions('SamsungBrowser Android'), /Samsung Internet/);
   assert.match(permissionInstructions('iPhone Safari'), /Settings/);
-  assert.match(permissionInstructions('Android Chrome'), /lock\/site icon/);
+  assert.match(permissionInstructions('Android Chrome'), /lock or site icon/);
 });
 
 test('permission queries are optional and failures degrade cleanly', async () => {
@@ -20,10 +20,10 @@ test('media helper enforces secure context and maps device errors', async () => 
   const insecure = await requestMediaStream({ navigatorObject: {}, windowObject: { isSecureContext: false, location: { hostname: 'example.com' } } });
   assert.equal(insecure.ok, false);
   assert.match(insecure.message, /HTTPS/);
-  assert.match(mediaErrorInfo({ name: 'NotReadableError' }).message, /busy/);
-  assert.match(mediaErrorInfo({ name: 'NotFoundError' }).message, /nahi mila/);
-  assert.match(mediaErrorInfo({ name: 'OverconstrainedError' }).message, /supported nahi/);
-  assert.match(mediaErrorInfo({ name: 'NotAllowedError' }, 'Android Chrome').instructions, /lock\/site icon/);
+  assert.match(mediaErrorInfo({ name: 'NotReadableError' }).message, /being used by another app/);
+  assert.match(mediaErrorInfo({ name: 'NotFoundError' }).message, /No microphone or camera/);
+  assert.match(mediaErrorInfo({ name: 'OverconstrainedError' }).message, /does not support/);
+  assert.match(mediaErrorInfo({ name: 'NotAllowedError' }, 'Android Chrome').instructions, /lock or site icon/);
 });
 
 test('video permission falls back to an audio-only stream', async () => {

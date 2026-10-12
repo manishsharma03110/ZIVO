@@ -31,6 +31,11 @@ Photos, videos and voice messages are deleted after 24 hours. Text and call mess
 `npm install && CODE_A=a1 CODE_B=b2 SESSION_SECRET=long-random-string npm run dev`
 (Without Redis/Blob, data is kept in memory. This is for testing only.)
 
+## Permissions and browser behavior
+- Permissions are per origin: use one stable production domain for all testing and production access because every Vercel deployment URL is a different origin.
+- Chrome's "Allow this time" prompt reappears on each visit; it does not persist across browser sessions.
+- Browsers may block camera or microphone access in embedded webviews (Instagram, WhatsApp, Facebook) or when the page is not served over HTTPS. Use the site settings to allow access and reload the page.
+
 ## Search engine indexing
 - Only the homepage (login page) can be indexed. Chat content is behind login, and `/api/` is blocked in robots.
 - After deploying, set `SITE_URL=https://your-domain.com` in the Vercel environment (used for canonical URL, sitemap.xml and robots).

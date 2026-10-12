@@ -256,14 +256,27 @@ em { font-style: normal; color: var(--p1); }
 .mchat .ice-debug{font-size:11px;opacity:.75}
 .mchat .playback-enable{align-self:center;min-height:48px;padding:0 16px;border-radius:24px;background:#fff;color:#241b52;font-weight:700;z-index:3}
 .mchat .permission-backdrop{position:absolute;inset:0;z-index:100;display:grid;place-items:center;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));background:rgba(12,8,34,.7)}
-.mchat .permission-dialog{width:min(420px,100%);max-height:calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px;border-radius:18px;background:var(--panel);color:var(--tx);box-shadow:0 22px 64px rgba(0,0,0,.38)}
+.mchat .permission-dialog{position:relative;width:min(420px,100%);max-height:calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px;border-radius:18px;background:var(--panel);color:var(--tx);box-shadow:0 22px 64px rgba(0,0,0,.38);border:1px solid rgba(124,58,237,.2)}
 .mchat .permission-dialog h2{margin:0 0 10px;font-size:21px}
 .mchat .permission-dialog p{margin:8px 0;line-height:1.5}
-.mchat .permission-steps{font-size:13px;color:var(--mut)}
-.mchat .permission-actions{display:flex;gap:10px;margin-top:18px}
+.mchat .permission-steps,.mchat .permission-status{font-size:13px;color:var(--mut)}
+.mchat .permission-icon{display:grid;place-items:center;width:60px;height:60px;border-radius:50%;margin:0 auto 12px;background:linear-gradient(135deg,#f1eaff,#c5adff);color:#6a3df0;font-size:28px;box-shadow:0 12px 24px rgba(106,61,240,.22)}
+.mchat .permission-close{position:absolute;right:12px;top:12px;width:32px;height:32px;border-radius:50%;background:transparent;color:var(--mut);font-size:24px;line-height:1;display:grid;place-items:center}
+.mchat .permission-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 .mchat .permission-actions button{min-height:48px;padding:0 16px;border-radius:12px;font-weight:700}
+.mchat .permission-dialog button:focus-visible{outline:3px solid #7a12db55;outline-offset:2px}
 .mchat .permission-allow{flex:1;background:var(--ic)!important;color:#fff!important}
-.mchat .permission-cancel{background:var(--chip)!important}
+.mchat .permission-deny,.mchat .permission-cancel,.mchat .permission-retry{background:var(--chip)!important;color:var(--tx)!important}
+.mchat .permission-actions.secondary-actions{margin-top:10px}
+.mchat .permission-actions.secondary-actions button{flex:1}
+.mchat .privacy-note{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--mut)}
+@media (max-width:480px){
+  .mchat .permission-backdrop{align-items:flex-end;padding:12px 12px calc(12px + env(safe-area-inset-bottom));}
+  .mchat .permission-dialog{width:100%;border-radius:20px 20px 0 0;max-height:min(82dvh, 560px);padding-bottom:calc(16px + env(safe-area-inset-bottom));}
+}
+@media (prefers-reduced-motion: reduce){
+  .mchat .permission-dialog, .mchat .permission-backdrop{transition:none !important;animation:none !important;}
+}
 @media (max-height:520px) and (orientation:landscape){
   .mchat .call .ctop{padding:8px;gap:4px}
   .mchat .call .big{width:62px;height:62px;margin:0}
